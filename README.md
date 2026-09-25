@@ -6,9 +6,9 @@
 [![Python 3.11](https://img.shields.io/badge/Python-3.11-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
 [![OPC-UA](https://img.shields.io/badge/IEC_62541-OPC--UA-005C8A?style=for-the-badge&logo=industrial-shields&logoColor=white)](https://opcfoundation.org/)
 [![Tests](https://img.shields.io/badge/Pytest-11_Passed-10B981?style=for-the-badge&logo=pytest&logoColor=white)](tests/)
-[![Precision](https://img.shields.io/badge/Precision-88.52%25-2563EB?style=for-the-badge)](data/validation_results.json)
-[![Recall](https://img.shields.io/badge/Recall-98.65%25-059669?style=for-the-badge)](data/validation_results.json)
-[![F1-Score](https://img.shields.io/badge/F1_Score-0.9331-7C3AED?style=for-the-badge)](data/validation_results.json)
+[![Precision](https://img.shields.io/badge/Precision-88.52%25-2563EB?style=for-the-badge)](#-benchmark-validation--financial-roi)
+[![Recall](https://img.shields.io/badge/Recall-98.65%25-059669?style=for-the-badge)](#-benchmark-validation--financial-roi)
+[![F1-Score](https://img.shields.io/badge/F1_Score-0.9331-7C3AED?style=for-the-badge)](#-benchmark-validation--financial-roi)
 [![Streamlit](https://img.shields.io/badge/UI-Streamlit_App-FF4B4B?style=for-the-badge&logo=streamlit&logoColor=white)](dashboard/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-6B7280?style=for-the-badge)](LICENSE)
 
@@ -230,9 +230,6 @@ DCTO/
 │   ├── components.py                           # Reusable Plotly charts (Gantt, scatter, waterfall)
 │   └── oee_calculator.py                       # OEE, tonnage, and financial ROI calculator
 │
-├── scripts/                                    # Chart generation and maintenance scripts
-│   └── generate_charts.py                      # 300-DPI publication chart generator
-│
 ├── tests/                                      # Automated Pytest test suite
 │   ├── smoke_test.py                           # Environment & import verification
 │   ├── test_simulator.py                       # Timing, bounds, and ground truth tests
@@ -241,14 +238,10 @@ DCTO/
 │   ├── test_end_to_end.py                      # Full pipeline integration test
 │   └── validate_detector.py                    # Benchmark validation script
 │
-├── data/                                       # Benchmark datasets & artifacts
-│   ├── ground_truth.csv                        # Injected anomalies ground-truth audit log
-│   ├── telemetry_stream.csv                    # Logged cycle telemetry for replay
-│   └── validation_results.json                 # Precision/recall benchmark metrics
-│
 ├── requirements.txt                            # Pinned Python dependencies
+├── .gitignore                                  # Git ignore specifications
 ├── LICENSE                                     # MIT License
-└── LIMITATIONS.md                              # Industrial caveats, calibration & plant integration
+└── README.md                                   # Technical documentation & project portfolio
 ```
 
 ---

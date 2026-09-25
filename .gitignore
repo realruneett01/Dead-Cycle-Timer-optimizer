@@ -21,10 +21,8 @@ htmlcov/
 .DS_Store
 Thumbs.db
 
-# Data & Artefacts (keep directory structure, exclude heavy/temp CSVs except ground truth template if needed)
+# Excluded documentation, generated artifacts, and helper scripts
 *Implementation_Plan*.md
-data/*.csv
-!data/ground_truth_template.csv
-data/*.json
-!data/validation_results.json
-!data/*.json.example
+LIMITATIONS.md
+data/
+scripts/
