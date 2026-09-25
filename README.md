@@ -172,9 +172,9 @@ Assuming standard commercial operating parameters for a single 28 MN press:
 ### Tier 1: Outlier-Resistant Rolling Baseline (Median Absolute Deviation)
 Standard sample variance is sensitive to outlier delays—a single 2-second stall inflates $\sigma$, blinding the detector to subsequent micro-stalls. DCTO uses the Hampel Median Absolute Deviation (MAD) scale estimator over a rolling window $W = 50$:
 
-$$\tilde{x} = \operatorname{median}(X_W)$$
+$$\tilde{x} = \text{median}(X_W)$$
 
-$$\text{MAD} = \operatorname{median}\left(\left| x_i - \tilde{x} \right|\right), \quad \forall x_i \in X_W$$
+$$\text{MAD} = \text{median}\left(\left| x_i - \tilde{x} \right|\right), \quad \forall x_i \in X_W$$
 
 $$\hat{\sigma}_{\text{robust}} = 1.4826 \times \text{MAD}$$
 
