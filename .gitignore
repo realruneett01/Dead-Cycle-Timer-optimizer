@@ -1,0 +1,30 @@
+# Virtual environments
+.venv/
+venv/
+ENV/
+env/
+
+# Bytecode & Caches
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Streamlit
+.streamlit/
+
+# IDE & OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Data & Artefacts (keep directory structure, exclude heavy/temp CSVs except ground truth template if needed)
+*Implementation_Plan*.md
+data/*.csv
+!data/ground_truth_template.csv
+data/*.json
+!data/validation_results.json
+!data/*.json.example
