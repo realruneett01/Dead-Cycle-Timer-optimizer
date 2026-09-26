@@ -2,7 +2,14 @@
 import argparse
 import asyncio
 import logging
+import sys
+from pathlib import Path
 from typing import List
+
+# Ensure project root is in sys.path when executed directly
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 
 from asyncua import Client
 from opcua.opcua_nodes import NAMESPACE_URI

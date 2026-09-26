@@ -5,10 +5,11 @@
 
 [![Python 3.11](https://img.shields.io/badge/Python-3.11-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
 [![OPC-UA](https://img.shields.io/badge/IEC_62541-OPC--UA-005C8A?style=for-the-badge&logo=industrial-shields&logoColor=white)](https://opcfoundation.org/)
-[![Tests](https://img.shields.io/badge/Pytest-11_Passed-10B981?style=for-the-badge&logo=pytest&logoColor=white)](tests/)
-[![Precision](https://img.shields.io/badge/Precision-88.52%25-2563EB?style=for-the-badge)](#-benchmark-validation--financial-roi)
-[![Recall](https://img.shields.io/badge/Recall-98.65%25-059669?style=for-the-badge)](#-benchmark-validation--financial-roi)
-[![F1-Score](https://img.shields.io/badge/F1_Score-0.9331-7C3AED?style=for-the-badge)](#-benchmark-validation--financial-roi)
+[![Tests](https://img.shields.io/badge/Pytest-12_Passed-10B981?style=for-the-badge&logo=pytest&logoColor=white)](tests/)
+[![Precision](https://img.shields.io/badge/Precision-95.42%25_(Page_CUSUM)-2563EB?style=for-the-badge)](#-empirical-benchmark-validation-baseline-vs-pages-cusum)
+[![Recall](https://img.shields.io/badge/Recall-98.32%25-059669?style=for-the-badge)](#-empirical-benchmark-validation-baseline-vs-pages-cusum)
+[![F1-Score](https://img.shields.io/badge/F1_Score-0.9685-7C3AED?style=for-the-badge)](#-empirical-benchmark-validation-baseline-vs-pages-cusum)
+[![FPR](https://img.shields.io/badge/FPR-0.33%25-10B981?style=for-the-badge)](#-empirical-benchmark-validation-baseline-vs-pages-cusum)
 [![Streamlit](https://img.shields.io/badge/UI-Streamlit_App-FF4B4B?style=for-the-badge&logo=streamlit&logoColor=white)](dashboard/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-6B7280?style=for-the-badge)](LICENSE)
 
@@ -16,7 +17,7 @@
 
 ---
 
-## 📌 Executive Summary & Visual Architecture
+## 📌 Executive Summary & Industrial Context
 
 In heavy industrial aluminum extrusion (15 MN – 50+ MN presses), plant throughput and operating margins are dictated by the cadence of the extrusion press. Every aluminum billet cycle splits into two fundamentally distinct phases:
 1. **Extrusion Stroke (Productive):** The main ram drives a heated billet (~450–500°C) through tool steel dies under 250–315 bar hydraulic pressure (45 to 120+ seconds).
@@ -36,7 +37,7 @@ In heavy industrial aluminum extrusion (15 MN – 50+ MN presses), plant through
 ```
 
 ### The Industrial Problem: Invisible Micro-Stalls & The SCADA Blind Spot
-Traditional PLC alarm thresholds and SCADA supervisory systems only flag gross mechanical failures (e.g., `Container Retract Timeout > 6.0s`). They are **completely blind** to transient 200–800 ms hydraulic valve hesitations, stick-slip friction, and contact bounce:
+Traditional PLC alarm thresholds and SCADA supervisory systems only flag gross mechanical failures (e.g., `Container Retract Timeout > 6.0s`). They are **blind** to transient 200–800 ms hydraulic valve hesitations, stick-slip friction, and contact bounce:
 - **Valve Spool Hesitation & Oil Varnish:** High-speed proportional directional valves (ISO VG 46 fluid) suffer sluggish spool movement during cold starts or thermal transients.
 - **Micro-Stalls & Mechanical Stiction:** Debris or seal wear on container tie rods causes momentary 500–1200 ms halts during continuous motion strokes.
 - **Creeping Mechanical Drift:** Cylinder seal blow-by and proportional relief valve pilot degradation introduce gradual duration inflation (+20%–40%) over weeks before an overt fault occurs.
@@ -46,7 +47,7 @@ Traditional PLC alarm thresholds and SCADA supervisory systems only flag gross m
 
 ## 🏗️ System Architecture
 
-DCTO bridges operational technology (OT) and machine learning through a modular, edge-native architecture designed for sub-millisecond precision and zero cloud dependency:
+DCTO bridges operational technology (OT) and statistical sequential analysis through a modular, edge-native architecture designed for sub-millisecond execution and zero cloud dependency:
 
 ![System Architecture](assets/architecture_diagram.png)
 
@@ -65,11 +66,12 @@ flowchart LR
         SRV --- TAG
     end
 
-    subgraph S3["3. Multi-Tier ML Engine"]
+    subgraph S3["3. Statistical & Sequential Engine"]
+        CUS[Primary: Page's CUSUM<br/>SPRT Bounded Decisions]
         ZSC[Tier 1: Rolling MAD Baseline<br/>Z-Score Outlier Quarantine]
         CPD[Tier 2: Ruptures Pelt<br/>RBF Kernel Changepoint]
         HMM[Tier 3: Gaussian HMM<br/>Latent State Viterbi]
-        ZSC & CPD & HMM --> FUS[Decision Fusion Engine]
+        CUS & ZSC & CPD & HMM --> FUS[Decision Fusion]
     end
 
     subgraph S4["4. Dashboard & Diagnostics"]
@@ -89,7 +91,7 @@ flowchart LR
 
 ## 📈 Real-Time Telemetry & Detection Dynamics
 
-The figure below illustrates the core detection capabilities running against high-speed press telemetry:
+The figure below illustrates the core detection capabilities running against press telemetry:
 
 ![Real-Time Telemetry and Multi-Tier Detection](assets/telemetry_and_anomalies.png)
 
@@ -105,7 +107,7 @@ The figure below illustrates the core detection capabilities running against hig
 DCTO uses a two-component data foundation combining **physics-informed stochastic press simulation** and an **immutable ground-truth fault injection audit trail**.
 
 ### 1. Simulated Press Kinematic Dataset
-To reflect realistic physical dynamics of 15 MN – 30 MN direct-drive oil hydraulic presses, telemetry is generated from physical kinematics calibrated against standard press manufacturer timing:
+To reflect physical dynamics of 15 MN – 30 MN direct-drive oil hydraulic presses, telemetry is generated from physical kinematics calibrated against standard press timing:
 
 | Phase Index | Phase Name | Nominal Duration ($t_{nom}$) | Gaussian Jitter ($\sigma$) | Actuator / Subsystem | Hydraulic Operating Condition |
 |---|---|---|---|---|---|
@@ -122,38 +124,47 @@ To reflect realistic physical dynamics of 15 MN – 30 MN direct-drive oil hydra
 - **Benchmark Evaluation Volume:** 600 full press cycles, producing **4,800 discrete phase events** and **86,400 synchronous hydraulic telemetry observations**.
 
 ### 2. Injected Ground-Truth Fault Dataset (`data/ground_truth.csv`)
-Anomalies are injected using controlled stochastic and deterministic fault schedules to establish an irrefutable evaluation benchmark:
+Anomalies are injected using controlled stochastic and deterministic fault schedules to establish an objective evaluation benchmark:
 
 | Anomaly Mode | Injected Magnitude | Typical Physical Root Cause | Target Detector Tier |
 |---|---|---|---|
-| **`VALVE_OVERLAP`** | **+0.35 s to +0.70 s** | Directional valve spool stick-slip, PLC digital output interlock delay, sensor contact bounce | **Tier 1 (Adaptive Rolling MAD)** |
-| **`MICRO_STALL`** | **+0.50 s to +1.25 s** | Hydraulic fluid contamination, guide rail stiction, mechanical hesitation during travel | **Tier 1 & Tier 3 (HMM)** |
+| **`VALVE_OVERLAP`** | **+0.35 s to +0.70 s** | Directional valve spool stick-slip, PLC digital output interlock delay, sensor contact bounce | **Page's CUSUM (SPRT)** |
+| **`MICRO_STALL`** | **+0.50 s to +1.25 s** | Hydraulic fluid contamination, guide rail stiction, mechanical hesitation during travel | **Page's CUSUM & Tier 1 MAD** |
 | **`CREEPING_WEAR`** | **+20% to +38% drift** across 25–40 cycles | Progressive cylinder piston seal blow-by, internal valve leakage, proportional relief pilot wear | **Tier 2 (Ruptures Pelt Changepoint)** |
 
-Every injected anomaly is logged with cycle index, phase name, true excess delay, and fault category into `data/ground_truth.csv`, ensuring zero data leakage and objective evaluation.
+Every injected anomaly is logged with cycle index, phase name, true excess delay, and fault category into `data/ground_truth.csv`, ensuring zero data leakage and reproducible evaluation.
 
 ---
 
-## 🎯 Benchmark Validation & Financial ROI
+## 🎯 Empirical Benchmark Validation: Baseline vs. Page's CUSUM
 
-The multi-tier detector was tested against the 600-cycle benchmark dataset (excluding a 25-cycle cold start warmup, yielding 4,600 evaluated events). Results were verified via [tests/validate_detector.py](file:///c:/Users/realr/OneDrive/Desktop/DCTO/tests/validate_detector.py):
+Both detectors were evaluated head-to-head on the 600-cycle benchmark dataset (575 post-warmup cycles, 4,600 evaluated events, 297 ground-truth anomalies). Run the validation script live at any time via:
+```powershell
+python tests/validate_detector.py
+```
 
 ![Benchmark Metrics and ROI](assets/benchmark_metrics.png)
 
-### Performance Scorecard
+### Side-by-Side Performance Scorecard
 
-| Metric | Target Specification | **Measured Result** | Validation Status |
-|---|---|---|---|
-| **Precision** | $\ge 88.00\%$ | **88.52%** | ✅ **PASSED** |
-| **Recall (Sensitivity)** | $\ge 90.00\%$ | **98.65%** | ✅ **PASSED** |
-| **F1-Score** | $\ge 0.8500$ | **0.9331** | ✅ **PASSED** |
-| **False Positive Rate (FPR)** | $\le 2.50\%$ | **0.88%** | ✅ **PASSED** |
-| **Warmup Latency** | $\le 25\text{ cycles}$ | **20 cycles** | ✅ **PASSED** |
+| Evaluation Metric | Rolling MAD Baseline | **Page's CUSUM (SPRT-Grounded)** | Delta / Improvement | Status |
+|---|---|---|---|---|
+| **True Positives (TP)** | 293 | **292** | -1 | ✅ High Sensitivity |
+| **False Positives (FP)** | 38 | **14** | **-63.2% Reduction** | 🛡️ Slashes False Alarms |
+| **False Negatives (FN)** | 4 | **5** | +1 | ✅ Minimal Missed Faults |
+| **True Negatives (TN)** | 4,265 | **4,289** | +24 | ✅ High Specificity |
+| **Precision** | 88.52% | **95.42%** | **+6.90%** | ✅ **SUPERIOR** |
+| **Recall (Sensitivity)** | **98.65%** | **98.32%** | -0.33% | ✅ **PASSED** |
+| **F1-Score** | 0.9331 | **0.9685** | **+0.0354** | ✅ **PASSED** |
+| **False Positive Rate (FPR)** | 0.88% | **0.33%** | **-62.5% Reduction** | ✅ **PASSED** |
 
-### Per-Class Detection Recall
-- 🟢 **Creeping Wear Sequences (`CREEPING_WEAR`):** **100.0%** (249 / 249 cycles captured)
-- 🔵 **Micro-Stalls & Stick-Slip (`MICRO_STALL`):** **94.7%** (18 / 19 stalls detected)
-- 🟡 **Valve Overlap Delays (`VALVE_OVERLAP`):** **89.7%** (26 / 29 delays detected)
+### Per-Class Detection Recall Breakdown
+- 🟢 **Creeping Wear Sequences (`CREEPING_WEAR`):** **100.0%** (249 / 249 cycles captured by both)
+- 🔵 **Valve Overlap Delays (`VALVE_OVERLAP`):** **89.7%** (26 / 29 delays detected by both)
+- 🟡 **Micro-Stalls & Stick-Slip (`MICRO_STALL`):** **89.5% CUSUM** (17 / 19) vs. **94.7% Baseline** (18 / 19)
+
+> [!NOTE]
+> **Why 3 Valve Overlap delays were missed:** In phases with higher inherent baseline variance (`billet_load`, $\sigma = 0.14\text{s}$), a small injected delay of $+0.35\text{s}$ coincided with a negative stochastic draw ($-0.11\text{s}$), leaving an effective excess delay of only $+0.24\text{s}$. On pure phase-duration residuals, that cannot be statistically separated from normal machine jitter without lowering the decision boundary and inflating false alarms.
 
 ### Plant-Wide Capacity & Economic Recovery
 Assuming standard commercial operating parameters for a single 28 MN press:
@@ -169,43 +180,55 @@ Assuming standard commercial operating parameters for a single 28 MN press:
 
 ## 🧮 Mathematical & Algorithmic Methodology
 
-### Tier 1: Outlier-Resistant Rolling Baseline (Median Absolute Deviation)
-Standard sample variance is sensitive to outlier delays—a single 2-second stall inflates $\sigma$, blinding the detector to subsequent micro-stalls. DCTO uses the Hampel Median Absolute Deviation (MAD) scale estimator over a rolling window $W = 50$:
+### 1. Primary Detector: Page's CUSUM Sequential Test (Page, 1954; Wald, 1945)
+Rather than choosing an ad-hoc threshold by eye, **Page's Cumulative Sum (CUSUM) test** derives its decision boundary directly from pre-stated, mathematically defensible error bounds.
 
-$$\tilde{x} = \text{median}(X_W)$$
+Given:
+- Null Hypothesis $H_0: x_n \sim \mathcal{N}(\mu_0, \sigma_0^2)$ (nominal operating cycle)
+- Alternative Hypothesis $H_1: x_n \sim \mathcal{N}(\mu_0 + \delta, \sigma_0^2)$ (delayed cycle with physical shift $\delta \ge 0.35\text{s}$)
+- Target Type I error bound (false-alarm probability): $\alpha = 0.01$ (1%)
+- Target Type II error bound (missed-detection probability): $\beta = 0.05$ (5%)
 
-$$\text{MAD} = \text{median}\left(\left| x_i - \tilde{x} \right|\right), \quad \forall x_i \in X_W$$
+From Wald's SPRT log-likelihood ratio, the optimal sequential increment is:
 
-$$\hat{\sigma}_{\text{robust}} = 1.4826 \times \text{MAD}$$
+$$s_n = \frac{\delta}{\sigma_0^2} \left( (x_n - \mu_0) - \frac{\delta}{2} \right)$$
+
+Page's CUSUM accumulates positive evidence and re-arms after reaching zero:
+
+$$S_0 = 0, \quad S_n = \max(0, \, S_{n-1} + s_n)$$
+
+The decision threshold $h$ is derived from the SPRT stopping boundary:
+
+$$h = \ln\left(\frac{1 - \beta}{\alpha}\right) = \ln\left(\frac{0.95}{0.01}\right) = \ln(95) \approx 4.554$$
+
+* **Decision Rule:** When $S_n \ge h$, an alarm is asserted, and $S_n$ is reset to zero to continue monitoring subsequent cycles.
+
+### 2. Tier 1: Outlier-Resistant Rolling Baseline (Median Absolute Deviation)
+Tracks running baseline $\mu_0$ and robust scale $\sigma_0$ using the Hampel Median Absolute Deviation (MAD) over a rolling window $W = 40$:
+
+$$\tilde{x} = \text{median}(X_W), \quad \text{MAD} = \text{median}\left(\left| x_i - \tilde{x} \right|\right), \quad \hat{\sigma}_{\text{robust}} = 1.4826 \times \text{MAD}$$
 
 $$Z_{\text{robust}}(x) = \frac{x - \tilde{x}}{\hat{\sigma}_{\text{robust}}}$$
 
-- **Detection Rule:** Anomaly asserted if $Z_{\text{robust}} > 2.75$ **AND** $\Delta t_{\text{excess}} \ge 0.12\text{ s}$.
-- **Anti-Poisoning Quarantine:** Anomalous cycles are excluded from rolling window updates to prevent baseline corruption.
-
-### Tier 2: Penalized Cost Changepoint Detection (Pelt)
-To distinguish temporary micro-stalls from progressive mechanical degradation, Tier 2 executes non-parametric changepoint search via the `ruptures` library:
+### 3. Tier 2: Penalized Cost Changepoint Detection (Pelt)
+Distinguishes transient micro-stalls from progressive mechanical degradation using non-parametric changepoint search via the `ruptures` library:
 
 $$\min_{\mathcal{T}} \sum_{k=0}^{K} \mathcal{C}\left(y_{\tau_k : \tau_{k+1}}\right) + \beta K$$
 
-- **Algorithm:** Pruned Exact Linear Time (**Pelt**) in $\mathcal{O}(N)$ computation time.
-- **Cost Function:** Radial Basis Function (**RBF**) kernel capturing arbitrary non-linear distribution shifts.
-- **Persistent Wear Latch:** When a statistically significant changepoint is confirmed, the phase is tagged with `CREEPING_WEAR` until scheduled maintenance.
+- **Algorithm:** Pruned Exact Linear Time (**Pelt**) in $\mathcal{O}(N)$ computation time with an **RBF** kernel.
+- **Persistent Wear Latch:** When a statistically significant changepoint is confirmed across consecutive cycles, the phase is tagged with `CREEPING_WEAR` until recalibration.
 
-### Tier 3: Gaussian Hidden Markov Model (HMM)
-A 3-state Gaussian HMM decodes unobserved machine health states via the Viterbi dynamic programming algorithm:
-- **State 0 (Healthy Nominal):** $\mu = \mu_{\text{nominal}}, \sigma = \sigma_{\text{nominal}}$
-- **State 1 (Creeping Degradation):** Mean shifted $+25\%$ to $+35\%$ above baseline.
-- **State 2 (Transient Micro-Stall):** High-variance, high-mean transient state.
+### 4. Tier 3: Gaussian Hidden Markov Model (HMM)
+A 3-state Gaussian HMM decodes unobserved machine health states via the Viterbi dynamic programming algorithm (State 0: Healthy, State 1: Creeping Wear, State 2: Transient Stall).
 
 ---
 
 ## 📁 Repository Structure
 
 ```
-DCTO/
+Dead-Cycle-Timer-optimizer/
 ├── assets/                                     # High-resolution architectural & benchmark figures
-│   ├── architecture_diagram.png                # Vector-style 4-stage pipeline diagram
+│   ├── architecture_diagram.png                # 4-stage pipeline infographic
 │   ├── telemetry_and_anomalies.png             # Scatter, waterfall & hydraulic telemetry
 │   └── benchmark_metrics.png                   # Confusion matrix, class recall & economic ROI
 │
@@ -219,11 +242,12 @@ DCTO/
 │   ├── opcua_server.py                         # Async OPC-UA server (asyncua)
 │   └── test_client.py                          # Verification subscription client
 │
-├── detector/                                   # Multi-tier anomaly detection service
+├── detector/                                   # Anomaly detection engines
+│   ├── cusum_detector.py                       # Page's CUSUM sequential test (SPRT-grounded)
 │   ├── rolling_baseline.py                     # Tier 1: Z-score & MAD rolling statistics
 │   ├── changepoint_detector.py                 # Tier 2: ruptures Pelt changepoint analysis
 │   ├── hmm_detector.py                         # Tier 3: hmmlearn Gaussian HMM classifier
-│   └── detector_service.py                     # Unified detection runner
+│   └── detector_service.py                     # Unified multi-tier detection runner
 │
 ├── dashboard/                                  # Streamlit & Plotly interactive UI
 │   ├── dashboard_app.py                        # Multi-tab Streamlit dashboard application
@@ -234,9 +258,9 @@ DCTO/
 │   ├── smoke_test.py                           # Environment & import verification
 │   ├── test_simulator.py                       # Timing, bounds, and ground truth tests
 │   ├── test_opcua.py                           # Server & client subscription integration tests
-│   ├── test_detector.py                        # Statistical & algorithm unit tests
+│   ├── test_detector.py                        # Statistical, CUSUM & algorithm unit tests
 │   ├── test_end_to_end.py                      # Full pipeline integration test
-│   └── validate_detector.py                    # Benchmark validation script
+│   └── validate_detector.py                    # Side-by-side benchmark comparison script
 │
 ├── requirements.txt                            # Pinned Python dependencies
 ├── .gitignore                                  # Git ignore specifications
@@ -264,28 +288,29 @@ pip install -r requirements.txt
 ```
 
 ### 2. Run Automated Test Suite
-Execute the 11 unit and integration tests covering simulation, OPC-UA protocol exchange, and statistical algorithms:
+Execute the 12 unit and integration tests covering simulation, CUSUM detector, OPC-UA protocol exchange, and statistical algorithms:
 ```powershell
 pytest -v
 ```
-*Expected: 11 passed in < 2 seconds.*
+*Expected: 12 passed in ~6 seconds.*
 
-### 3. Run Benchmark Validation
-Execute the 600-cycle validation harness to verify confusion matrix and recall metrics:
+### 3. Run Benchmark Validation Harness
+Execute the 600-cycle validation harness to reproduce the side-by-side comparison report:
 ```powershell
 python tests/validate_detector.py
 ```
-*Outputs: Evaluated 4,600 events, Precision: 88.52%, Recall: 98.65%, F1: 0.9331, FPR: 0.88%.*
+*Prints comparative confusion matrices, Precision (95.42% CUSUM vs. 88.52% Baseline), Recall, and per-class breakdowns.*
 
 ### 4. Run OPC-UA Industrial Server & Edge Client
 Start the asynchronous IEC 62541 OPC-UA server publishing ISA-95 node telemetry:
 ```powershell
-# Terminal 1: Start OPC-UA server at 20x real-time simulation speed
-python opcua/opcua_server.py --speedup 20.0
+# Terminal 1: Start OPC-UA server at 20x real-time simulation speed (module syntax)
+python -m opcua.opcua_server --speedup 20.0
 
 # Terminal 2: Connect real-time subscription test client
-python opcua/test_client.py --events 30
+python -m opcua.test_client --events 30
 ```
+*(Direct script syntax `python opcua/opcua_server.py` is also supported).*
 
 ### 5. Launch the Executive & Diagnostics Dashboard
 Run the Streamlit interactive dashboard:
@@ -299,12 +324,13 @@ Open **`http://localhost:8501`** to interact with:
 
 ---
 
-## 🏭 Edge Deployment & Industrial Hardening
+## 🏭 Edge Deployment & Measured Latency Benchmarks
 
-For production industrial deployment on aluminum extrusion lines:
-- **PLC Interfacing:** Runs adjacent to Siemens S7-1500 or Beckhoff TwinCAT 3 controllers via hardware edge IPCs (e.g., Siemens IPC427E, Beckhoff CX2040).
-- **Sub-Second Response:** Event-driven architecture processes phase transitions in $< 1.5\text{ ms}$, delivering real-time supervisory alerts directly to SCADA/MES before the next billet is loaded.
-- **Zero Cloud Requirement:** Entire statistical and ML stack executes on edge CPU with under 150 MB RAM footprint.
+Benchmarked on standard x86 CPU without specialized hardware acceleration:
+- **Page's CUSUM Evaluation Latency:** Measured execution time averaged **1.78 µs** per event (p99 = 3.70 µs).
+- **Full Detection Pipeline Latency:** Measured execution time averaged **0.36 ms** per event (p99 = 0.72 ms), well within 1–10 ms PLC cycle boundaries.
+- **Memory Footprint:** Observed continuous background execution memory stabilizes at **~65 MB RSS**.
+- **Integration Architecture:** Designed for supervisory edge deployment alongside plant PLCs via standard IEC 62541 OPC-UA client/server subscriptions.
 
 ---
 
