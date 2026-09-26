@@ -51,3 +51,39 @@ def test_hmm_detector():
     stalled_seq = [2.50, 2.51, 3.80]
     decoded_stall = hmm_det.decode_sequence(stalled_seq)
     assert decoded_stall[-1] in (1, 2)
+
+def test_page_cusum_detector():
+    from detector.cusum_detector import PageCusumDetector
+    cusum = PageCusumDetector(alpha=0.01, beta=0.05, default_delta_sec=0.35, min_baseline_samples=10)
+    
+    # 15 nominal samples: should not trigger alarm
+    for c in range(1, 16):
+        res = cusum.evaluate_observation(
+            cycle_id=c,
+            phase_name="container_shift_close",
+            duration=2.80 + float(np.random.normal(0, 0.04)),
+            baseline_mu=2.80,
+            baseline_sigma=0.08,
+            sample_count=c
+        )
+        assert not res.is_alarm
+        
+    # Inject a sequence of delayed cycles (+0.40s)
+    # CUSUM should accumulate evidence and assert alarm within 1-2 cycles
+    alarm_fired = False
+    for c in range(16, 20):
+        res = cusum.evaluate_observation(
+            cycle_id=c,
+            phase_name="container_shift_close",
+            duration=3.25,
+            baseline_mu=2.80,
+            baseline_sigma=0.08,
+            sample_count=c
+        )
+        if res.is_alarm:
+            alarm_fired = True
+            assert res.cumulative_sum >= res.threshold_h or res.standardized_residual >= 4.0
+            break
+            
+    assert alarm_fired, "Page CUSUM failed to trigger on consecutive +0.45s delays"
+
