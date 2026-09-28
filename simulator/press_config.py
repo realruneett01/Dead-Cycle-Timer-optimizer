@@ -1,9 +1,11 @@
 """Industrial configuration and nominal operating parameters for Heavy Extrusion Press."""
 from dataclasses import dataclass, field
-from typing import Dict, List, Tuple
+from typing import Dict, List
 
 @dataclass(frozen=True)
 class PhaseTiming:
+    """Nominal physical metrics and bounds for a single cycle phase."""
+    # pylint: disable=too-many-instance-attributes
     name: str
     nominal_sec: float
     std_dev_sec: float
@@ -23,7 +25,7 @@ class PressConfig:
     nominal_billet_length_mm: float = 850.0
     nominal_billet_diameter_mm: float = 228.0
     nominal_billet_weight_kg: float = 95.0
-    
+
     # Phase sequence and physical nominal timings
     phases: Dict[str, PhaseTiming] = field(default_factory=lambda: {
         "decompression": PhaseTiming(
@@ -126,16 +128,20 @@ class PressConfig:
 
     @property
     def canonical_phase_names(self) -> List[str]:
+        """Ordered list of canonical phase names."""
         return list(self.phases.keys())
 
     @property
     def dead_cycle_phase_names(self) -> List[str]:
+        """Ordered list of non-productive dead-cycle phase names."""
         return [name for name, p in self.phases.items() if p.is_dead_cycle]
 
     @property
     def nominal_dead_cycle_duration(self) -> float:
+        """Total nominal duration of all dead-cycle phases in seconds."""
         return sum(p.nominal_sec for p in self.phases.values() if p.is_dead_cycle)
 
     @property
     def nominal_total_cycle_duration(self) -> float:
+        """Total nominal duration of an entire press cycle in seconds."""
         return sum(p.nominal_sec for p in self.phases.values())

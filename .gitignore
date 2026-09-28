@@ -32,5 +32,16 @@ scripts/
 .repowise/
 .antigravity*
 claude-session-history.md
+agy-session.md
 .mcp.json
+
+# Node & Package Managers
+node_modules/
+package.json
+package-lock.json
+biome.json
+lefthook.yml
+*.log
+
+
 

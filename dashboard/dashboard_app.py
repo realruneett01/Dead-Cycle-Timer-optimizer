@@ -1,5 +1,4 @@
 """Dead-Cycle Time Optimizer (DCTO) - Executive & Engineering Dashboard."""
-import os
 import sys
 from pathlib import Path
 
@@ -8,6 +7,7 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
+# pylint: disable=wrong-import-position
 import pandas as pd
 import streamlit as st
 
@@ -80,21 +80,42 @@ with st.sidebar:
 
     st.subheader("🏭 Press & Plant Configuration")
     press_id = st.text_input("Press ID", value="Extrusion_Press_28MN_01")
-    tonnage = st.number_input("Rated Press Tonnage (MN)", min_value=10.0, max_value=80.0, value=28.0, step=1.0)
-    billet_wt = st.number_input("Nominal Billet Weight (kg)", min_value=30.0, max_value=300.0, value=95.0, step=5.0)
-    nominal_cph = st.number_input("Nominal Cycles / Hour", min_value=20.0, max_value=70.0, value=43.0, step=1.0)
-    op_hours = st.number_input("Operating Hours / Year (24/7)", min_value=2000.0, max_value=8760.0, value=7200.0, step=100.0)
-    hourly_rate = st.number_input("Press Operating Cost (€ / Hour)", min_value=300.0, max_value=3000.0, value=950.0, step=50.0)
-    aluminum_margin = st.number_input("Extrusion Value-Add (€ / Ton)", min_value=100.0, max_value=1500.0, value=450.0, step=25.0)
+    tonnage = st.number_input(
+        "Rated Press Tonnage (MN)", min_value=10.0, max_value=80.0, value=28.0, step=1.0
+    )
+    billet_wt = st.number_input(
+        "Nominal Billet Weight (kg)", min_value=30.0, max_value=300.0, value=95.0, step=5.0
+    )
+    nominal_cph = st.number_input(
+        "Nominal Cycles / Hour", min_value=20.0, max_value=70.0, value=43.0, step=1.0
+    )
+    op_hours = st.number_input(
+        "Operating Hours / Year (24/7)",
+        min_value=2000.0, max_value=8760.0, value=7200.0, step=100.0
+    )
+    hourly_rate = st.number_input(
+        "Press Operating Cost (€ / Hour)",
+        min_value=300.0, max_value=3000.0, value=950.0, step=50.0
+    )
+    aluminum_margin = st.number_input(
+        "Extrusion Value-Add (€ / Ton)",
+        min_value=100.0, max_value=1500.0, value=450.0, step=25.0
+    )
 
     st.divider()
     st.subheader("🎯 Optimization Tuning")
-    capture_efficiency = st.slider("Target Delay Elimination Rate (%)", min_value=50, max_value=100, value=85, step=5) / 100.0
-    detection_threshold = st.slider("Detector Z-Score Sensitivity", min_value=2.0, max_value=3.5, value=2.75, step=0.05)
+    capture_efficiency = st.slider(
+        "Target Delay Elimination Rate (%)", min_value=50, max_value=100, value=85, step=5
+    ) / 100.0
+    detection_threshold = st.slider(
+        "Detector Z-Score Sensitivity", min_value=2.0, max_value=3.5, value=2.75, step=0.05
+    )
 
     st.divider()
     st.subheader("🔄 Data Feed Source")
-    data_source = st.radio("Telemetry Mode", ["Generated Benchmark (400 Cycles)", "Load CSV Stream"])
+    data_source = st.radio(
+        "Telemetry Mode", ["Generated Benchmark (400 Cycles)", "Load CSV Stream"]
+    )
 
 # Initialize or Load Telemetry
 plant_params = PlantParameters(
@@ -111,6 +132,7 @@ config = PressConfig()
 
 @st.cache_data
 def generate_or_load_data(source_mode: str, z_thresh: float):
+    """Generates simulated cycle stream or loads existing telemetry from CSV."""
     telem_file = PROJECT_ROOT / "data" / "telemetry_stream.csv"
     if source_mode == "Load CSV Stream" and telem_file.exists():
         df = pd.read_csv(telem_file)
@@ -161,18 +183,40 @@ with col_status:
 # ----------------- TOP KPI ROW -----------------
 kpi1, kpi2, kpi3, kpi4, kpi5 = st.columns(5)
 with kpi1:
-    st.metric("Recoverable DCT", f"{metrics.avg_recoverable_sec_per_cycle:.2f} s / cycle", delta=f"{metrics.oee_availability_gain_pct:.1f}% OEE Gain")
+    st.metric(
+        "Recoverable DCT",
+        f"{metrics.avg_recoverable_sec_per_cycle:.2f} s / cycle",
+        delta=f"{metrics.oee_availability_gain_pct:.1f}% OEE Gain"
+    )
 with kpi2:
-    st.metric("Annual Machine Hours", f"{metrics.annual_recovered_hours:.1f} hrs / yr", delta="+ Production Uptime")
+    st.metric(
+        "Annual Machine Hours",
+        f"{metrics.annual_recovered_hours:.1f} hrs / yr",
+        delta="+ Production Uptime"
+    )
 with kpi3:
-    st.metric("Capacity Value (€)", f"€{metrics.total_annual_economic_benefit_eur:,.0f} / yr", delta="+ Direct & Margin")
+    st.metric(
+        "Capacity Value (€)",
+        f"€{metrics.total_annual_economic_benefit_eur:,.0f} / yr",
+        delta="+ Direct & Margin"
+    )
 with kpi4:
-    st.metric("Additional Output", f"{metrics.annual_additional_tonnage_mt:.1f} Tons / yr", delta=f"+{metrics.annual_additional_billets:,} Billets")
+    st.metric(
+        "Additional Output",
+        f"{metrics.annual_additional_tonnage_mt:.1f} Tons / yr",
+        delta=f"+{metrics.annual_additional_billets:,} Billets"
+    )
 with kpi5:
     latest_anom = telemetry_df.tail(8)["is_anomaly"].any()
+    # pylint: disable=invalid-name
     status_text = "Anomaly Alert" if latest_anom else "Nominal Operation"
     delta_color = "inverse" if latest_anom else "normal"
-    st.metric("Current Press State", status_text, delta="Inspected" if latest_anom else "Clear", delta_color=delta_color)
+    st.metric(
+        "Current Press State",
+        status_text,
+        delta="Inspected" if latest_anom else "Clear",
+        delta_color=delta_color
+    )
 
 st.divider()
 
@@ -200,27 +244,33 @@ with tab1:
 
     with col_summary:
         st.markdown(f"### Cycle #{latest_cycle_id} Summary")
-        dead_cycle_time = cycle_events_df[cycle_events_df["phase_name"] != "extrusion"]["actual_duration"].sum()
+        dead_cycle_mask = cycle_events_df["phase_name"] != "extrusion"
+        dead_cycle_time = cycle_events_df[dead_cycle_mask]["actual_duration"].sum()
         total_time = cycle_events_df["actual_duration"].sum()
         excess_time = cycle_events_df["excess_seconds"].sum()
 
-        st.write(f"⏱️ **Dead-Cycle Time (DCT):** `{dead_cycle_time:.2f} s` (Nominal: `{config.nominal_dead_cycle_duration:.1f} s`)")
-        st.write(f"⏳ **Total Billet Cycle Time:** `{total_time:.2f} s` (Nominal: `{config.nominal_total_cycle_duration:.1f} s`)")
+        st.write(
+            f"⏱️ **Dead-Cycle Time (DCT):** `{dead_cycle_time:.2f} s` "
+            f"(Nominal: `{config.nominal_dead_cycle_duration:.1f} s`)"
+        )
+        st.write(
+            f"⏳ **Total Billet Cycle Time:** `{total_time:.2f} s` "
+            f"(Nominal: `{config.nominal_total_cycle_duration:.1f} s`)"
+        )
         if excess_time > 0:
             st.error(f"⚠️ **Recoverable Micro-Stall Delay:** `+{excess_time:.2f} s`")
         else:
             st.success("✅ **Cycle Executed at Target Kinematic Velocity**")
 
-        st.dataframe(
-            cycle_events_df[["phase_name", "actual_duration", "nominal_duration", "is_anomaly", "anomaly_type"]],
-            hide_index=True,
-            width="stretch"
-        )
+        display_cols = [
+            "phase_name", "actual_duration", "nominal_duration", "is_anomaly", "anomaly_type"
+        ]
+        st.dataframe(cycle_events_df[display_cols], hide_index=True, width="stretch")
 
 # ----------------- TAB 2: DIAGNOSTICS -----------------
 with tab2:
     st.subheader("Sub-Second Anomaly Diagnostics & Root-Cause Attribution")
-    
+
     col_pie, col_scatter = st.columns([1, 2])
     with col_pie:
         fig_pie = render_anomaly_breakdown_pie(telemetry_df)
@@ -234,8 +284,10 @@ with tab2:
             index=2 # shear_stroke
         )
         phase_nominal = config.phases[selected_phase].nominal_sec
-        threshold_val = phase_nominal + (detection_threshold * config.phases[selected_phase].std_dev_sec)
-        
+        threshold_val = phase_nominal + (
+            detection_threshold * config.phases[selected_phase].std_dev_sec
+        )
+
         fig_scatter = render_phase_duration_scatter(
             telemetry_df,
             phase_name=selected_phase,
@@ -245,9 +297,11 @@ with tab2:
         st.plotly_chart(fig_scatter, width="stretch")
 
     st.subheader("Flagged Anomaly Audit Log (Last 15 Incidents)")
-    anom_table = telemetry_df[telemetry_df["is_anomaly"]].tail(15)[
-        ["cycle_id", "phase_name", "actual_duration", "baseline_median", "robust_z_score", "excess_seconds", "anomaly_type"]
+    audit_cols = [
+        "cycle_id", "phase_name", "actual_duration", "baseline_median",
+        "robust_z_score", "excess_seconds", "anomaly_type"
     ]
+    anom_table = telemetry_df[telemetry_df["is_anomaly"]].tail(15)[audit_cols]
     st.dataframe(anom_table, hide_index=True, width="stretch")
 
 # ----------------- TAB 3: OEE & FINANCIAL MODEL -----------------
@@ -256,9 +310,11 @@ with tab3:
 
     st.markdown("""
     <div class="disclaimer-banner">
-        <b>Industrial Verification Notice:</b> All financial capacity gains and tonnage estimates are analytical projections 
-        calculated from the configured press operating parameters and simulated cycle telemetry. They demonstrate algorithmic 
-        dead-cycle recovery potential and must be calibrated to physical plant LVDTs and operating cost accounting before commissioning.
+        <b>Industrial Verification Notice:</b> All financial capacity gains and tonnage
+        estimates are analytical projections calculated from configured press operating
+        parameters and simulated telemetry. They demonstrate algorithmic dead-cycle
+        recovery potential and must be calibrated to physical plant LVDTs and operating
+        cost accounting before commissioning.
     </div>
     """, unsafe_allow_html=True)
 
@@ -269,10 +325,31 @@ with tab3:
 
     with col_fin2:
         st.markdown("### Operational Capacity Breakdown")
-        st.write(f"- **Planned Production Schedule:** `{plant_params.operating_hours_per_year:,.0f} hours / year` (3 Shifts, 24/7)")
-        st.write(f"- **Recovered Machine Availability:** `+{metrics.annual_recovered_hours:.1f} hours / year`")
-        st.write(f"- **Additional Finished Billets:** `+{metrics.annual_additional_billets:,} billets / year`")
-        st.write(f"- **Additional Aluminum Throughput:** `+{metrics.annual_additional_tonnage_mt:.1f} MT / year`")
-        st.write(f"- **Direct Machine Amortization Savings:** `€{metrics.annual_direct_cost_savings_eur:,.0f} / year`")
-        st.write(f"- **Tonnage Value-Add Margin:** `€{metrics.annual_margin_gain_eur:,.0f} / year`")
-        st.metric("Total Annual Economic Gain", f"€{metrics.total_annual_economic_benefit_eur:,.0f}", delta=f"{metrics.oee_availability_gain_pct:.2f}% OEE Availability Gain")
+        st.write(
+            f"- **Planned Production Schedule:** "
+            f"`{plant_params.operating_hours_per_year:,.0f} hours / year` (3 Shifts, 24/7)"
+        )
+        st.write(
+            f"- **Recovered Machine Availability:** `+{metrics.annual_recovered_hours:.1f} "
+            "hours / year`"
+        )
+        st.write(
+            f"- **Additional Finished Billets:** `+{metrics.annual_additional_billets:,} "
+            "billets / year`"
+        )
+        st.write(
+            f"- **Additional Aluminum Throughput:** `+{metrics.annual_additional_tonnage_mt:.1f} "
+            "MT / year`"
+        )
+        st.write(
+            "- **Direct Machine Amortization Savings:** "
+            f"`€{metrics.annual_direct_cost_savings_eur:,.0f} / year`"
+        )
+        st.write(
+            f"- **Tonnage Value-Add Margin:** `€{metrics.annual_margin_gain_eur:,.0f} / year`"
+        )
+        st.metric(
+            "Total Annual Economic Gain",
+            f"€{metrics.total_annual_economic_benefit_eur:,.0f}",
+            delta=f"{metrics.oee_availability_gain_pct:.2f}% OEE Availability Gain"
+        )

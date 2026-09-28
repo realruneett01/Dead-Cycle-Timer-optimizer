@@ -26,6 +26,7 @@ class HMMDetector:
             n_iter=50,
             random_state=self.random_state
         )
+        self.model.n_features = 1
 
         # Transition matrix prior: strong self-transition persistence
         self.model.transmat_ = np.array([
@@ -61,7 +62,7 @@ class HMMDetector:
             self.initialize_with_priors(mean_val, std_val)
             return
 
-        X = np.array(training_durations).reshape(-1, 1)
+        obs_matrix = np.array(training_durations).reshape(-1, 1)
         self.model = hmm.GaussianHMM(
             n_components=self.n_states,
             covariance_type="diag",
@@ -74,16 +75,17 @@ class HMMDetector:
         # cluster instead so EM starts from distinct nominal/wear/stall regimes.
         centers = np.sort(
             KMeans(n_clusters=self.n_states, n_init=10, random_state=self.random_state)
-            .fit(X).cluster_centers_.ravel()
+            .fit(obs_matrix).cluster_centers_.ravel()
         )
-        labels = np.searchsorted((centers[1:] + centers[:-1]) / 2.0, X.ravel())
+        labels = np.searchsorted((centers[1:] + centers[:-1]) / 2.0, obs_matrix.ravel())
         self.model.means_ = centers.reshape(-1, 1)
         cluster_vars = [
-            float(np.var(X[labels == k])) if np.any(labels == k) else float(np.var(X))
+            float(np.var(obs_matrix[labels == k]))
+            if np.any(labels == k) else float(np.var(obs_matrix))
             for k in range(self.n_states)
         ]
         self.model.covars_ = np.array([[max(v, 1e-4)] for v in cluster_vars])
-        self.model.fit(X)
+        self.model.fit(obs_matrix)
 
         # Sort hidden states by ascending mean so State 0 is always lowest mean (Nominal)
         means = self.model.means_.flatten()
@@ -98,16 +100,59 @@ class HMMDetector:
 
         self._is_fitted = True
 
+    def export_state(self) -> dict:
+        """Serializes fitted HMM parameters for model persistence across restarts."""
+        if not self._is_fitted or self.model is None:
+            return {"is_fitted": False}
+        covs = getattr(self.model, "_covars_", None)
+        if covs is None:
+            covs = self.model.covars_
+        covs_list = covs.tolist() if hasattr(covs, "tolist") else list(covs)
+        return {
+            "is_fitted": True,
+            "n_states": self.n_states,
+            "means": self.model.means_.tolist(),
+            "covars": covs_list,
+            "transmat": self.model.transmat_.tolist(),
+            "startprob": self.model.startprob_.tolist()
+        }
+
+    def import_state(self, state: dict):
+        """Restores HMM parameters from serialized deployment checkpoint."""
+        if not state.get("is_fitted", False):
+            return
+        self.model = hmm.GaussianHMM(
+            n_components=state.get("n_states", self.n_states),
+            covariance_type="diag",
+            random_state=self.random_state
+        )
+        self.model.n_features = 1
+        self.model.means_ = np.array(state["means"])
+        covs = np.array(state["covars"])
+        if covs.ndim == 3:
+            covs = np.array([np.diag(c) for c in covs])
+        self.model._covars_ = covs
+        self.model.transmat_ = np.array(state["transmat"])
+        self.model.startprob_ = np.array(state["startprob"])
+        self._is_fitted = True
+
+    def adapt_to_stream(self, durations: List[float]):
+        """Online adaptation: refits or updates emission states from recent observations."""
+        valid = [float(x) for x in durations if isinstance(x, (int, float)) and np.isfinite(x) and x > 0.0]
+        if len(valid) >= 30:
+            self.fit(valid)
+
     def decode_sequence(self, durations: List[float]) -> List[int]:
         """Decodes the most likely latent state sequence using the Viterbi algorithm."""
         if not self._is_fitted or not durations:
             return [0] * len(durations)
 
-        X = np.array(durations).reshape(-1, 1)
+        clean = [float(x) if (isinstance(x, (int, float)) and np.isfinite(x) and x > 0.0) else 0.0 for x in durations]
+        obs_matrix = np.array(clean).reshape(-1, 1)
         try:
-            _, states = self.model.decode(X, algorithm="viterbi")
+            _, states = self.model.decode(obs_matrix, algorithm="viterbi")
             return list(states)
-        except Exception:
+        except (ValueError, RuntimeError, AttributeError):
             return [0] * len(durations)
 
     def predict_latest_state(self, durations: List[float], window_size: int = 20) -> int:
@@ -117,3 +162,4 @@ class HMMDetector:
         window = durations[-window_size:]
         states = self.decode_sequence(window)
         return states[-1] if states else 0
+

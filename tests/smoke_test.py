@@ -1,8 +1,10 @@
-"""Smoke test to verify that all core scientific, automation, and dashboard dependencies import cleanly."""
-import sys
+"""Smoke test to verify that all core scientific, automation,
+and dashboard dependencies import cleanly.
+"""
 import importlib
 
 def test_imports():
+    """Validates that all external dependencies are importable."""
     packages = [
         "asyncua",
         "numpy",

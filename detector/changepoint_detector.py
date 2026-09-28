@@ -19,23 +19,34 @@ class ChangepointDetector:
         self.penalty = penalty
         self.model = model
 
-    def _fit_pelt(self, signal: np.ndarray, pen: float) -> Optional[List[int]]:
-        """Fits Pelt model and returns changepoints, or None on numerical/parameter failure."""
+    def _run_segmentation(
+        self,
+        algo,
+        signal: np.ndarray,
+        pen: float
+    ) -> List[int]:
+        """Fits a ruptures segmentation model and extracts valid interior changepoint indices."""
         try:
-            algo = rpt.Pelt(model=self.model, min_size=self.min_size, jump=1).fit(signal)
+            algo.fit(signal)
             result = algo.predict(pen=pen)
             return [cp for cp in result if cp < len(signal)]
-        except (ValueError, TypeError, np.linalg.LinAlgError, rpt.exceptions.BadSegmentationParameters, rpt.exceptions.NotEnoughPoints, RuntimeError):
-            return None
+        except (
+            ValueError, TypeError, np.linalg.LinAlgError,
+            rpt.exceptions.BadSegmentationParameters,
+            rpt.exceptions.NotEnoughPoints, RuntimeError
+        ):
+            return []
+
+    def _fit_pelt(self, signal: np.ndarray, pen: float) -> Optional[List[int]]:
+        """Fits Pelt model and returns changepoints, or None on numerical/parameter failure."""
+        algo = rpt.Pelt(model=self.model, min_size=self.min_size, jump=1)
+        res = self._run_segmentation(algo, signal, pen)
+        return res if res else None
 
     def _fit_binseg(self, signal: np.ndarray, pen: float) -> List[int]:
         """Fallback changepoint estimation using Binseg if Pelt fails."""
-        try:
-            algo = rpt.Binseg(model="l2", min_size=self.min_size).fit(signal)
-            result = algo.predict(pen=pen)
-            return [cp for cp in result if cp < len(signal)]
-        except (ValueError, TypeError, np.linalg.LinAlgError, rpt.exceptions.BadSegmentationParameters, rpt.exceptions.NotEnoughPoints, RuntimeError):
-            return []
+        algo = rpt.Binseg(model="l2", min_size=self.min_size)
+        return self._run_segmentation(algo, signal, pen)
 
     def find_changepoints(
         self,
@@ -46,11 +57,12 @@ class ChangepointDetector:
         Applies the Pelt (Pruned Exact Linear Time) algorithm on a sequence of durations.
         Returns a list of 0-based indices corresponding to detected change boundaries.
         """
-        if len(durations) < (self.min_size * 2):
+        clean = [float(x) for x in durations if isinstance(x, (int, float)) and np.isfinite(x)]
+        if len(clean) < (self.min_size * 2) or float(np.var(clean)) < 1e-5:
             return []
 
         pen = custom_penalty if custom_penalty is not None else self.penalty
-        signal = np.array(durations).reshape(-1, 1)
+        signal = np.array(clean).reshape(-1, 1)
 
         changepoints = self._fit_pelt(signal, pen)
         if changepoints is not None:

@@ -2,15 +2,28 @@
 import argparse
 import random
 import time
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Dict, Generator, List, Optional, Tuple
+from typing import Generator, List, Optional, Tuple
 
 from simulator.anomaly_injector import AnomalyEvent, AnomalyInjector, AnomalyType
 from simulator.press_config import PhaseTiming, PressConfig
 
 @dataclass
+class PhaseEventContext:
+    """Context parameters for instantiating a cycle phase event."""
+    idx: int
+    name: str
+    active_id: int
+    base_time: datetime
+    cycle_elapsed_sec: float
+    anomaly_info: Tuple[AnomalyType, float]
+
+
+@dataclass
 class CycleEvent:
+    """Telemetry and anomaly metadata for a single simulated press cycle phase."""
+    # pylint: disable=too-many-instance-attributes
     cycle_id: int
     phase_name: str
     phase_index: int
@@ -26,7 +39,9 @@ class CycleEvent:
     injected_delay_sec: float
 
 class PressStateMachine:
-    """Simulates realistic kinematic and hydraulic state transitions of an industrial extrusion press."""
+    """Simulates realistic kinematic and hydraulic state transitions
+    of an industrial extrusion press.
+    """
 
     def __init__(
         self,
@@ -85,6 +100,34 @@ class PressStateMachine:
         )
         self.injector.log_anomaly(gt_event)
 
+    def _create_phase_event(self, ctx: PhaseEventContext) -> CycleEvent:
+        # pylint: disable=too-many-locals
+        """Constructs a CycleEvent and logs ground truth if anomalous."""
+        timing: PhaseTiming = self.config.phases[ctx.name]
+        duration, has_anomaly, anom_type, delay = self._compute_phase_duration(timing, ctx.anomaly_info)
+        pressure, valve_spool, ram_pos = self._sample_telemetry(timing, ctx.name)
+
+        offset = ctx.cycle_elapsed_sec
+        phase_dt = datetime.fromtimestamp(ctx.base_time.timestamp() + offset, tz=timezone.utc)
+        event = CycleEvent(
+            cycle_id=ctx.active_id,
+            phase_name=ctx.name,
+            phase_index=ctx.idx,
+            start_time=phase_dt.isoformat(),
+            duration_sec=duration,
+            nominal_duration_sec=timing.nominal_sec,
+            is_dead_cycle=timing.is_dead_cycle,
+            pressure_bar=pressure,
+            valve_spool_pct=valve_spool,
+            ram_position_mm=ram_pos,
+            has_anomaly=has_anomaly,
+            anomaly_type=anom_type.value if hasattr(anom_type, "value") else str(anom_type),
+            injected_delay_sec=delay
+        )
+        if has_anomaly:
+            self._log_ground_truth(event, timing, anom_type)
+        return event
+
     def run_cycle(
         self,
         cycle_id: Optional[int] = None,
@@ -108,32 +151,18 @@ class PressStateMachine:
         cycle_elapsed_sec = 0.0
 
         for idx, name in enumerate(phase_names):
-            timing: PhaseTiming = self.config.phases[name]
             anomaly_info = cycle_anomalies.get(name, (AnomalyType.NONE, 0.0))
-            duration, has_anomaly, anom_type, delay = self._compute_phase_duration(timing, anomaly_info)
-            pressure, valve_spool, ram_pos = self._sample_telemetry(timing, name)
-
-            phase_dt = datetime.fromtimestamp(base_time.timestamp() + cycle_elapsed_sec, tz=timezone.utc)
-            event = CycleEvent(
-                cycle_id=active_id,
-                phase_name=name,
-                phase_index=idx,
-                start_time=phase_dt.isoformat(),
-                duration_sec=duration,
-                nominal_duration_sec=timing.nominal_sec,
-                is_dead_cycle=timing.is_dead_cycle,
-                pressure_bar=pressure,
-                valve_spool_pct=valve_spool,
-                ram_position_mm=ram_pos,
-                has_anomaly=has_anomaly,
-                anomaly_type=anom_type.value if hasattr(anom_type, "value") else str(anom_type),
-                injected_delay_sec=delay
+            ctx = PhaseEventContext(
+                idx=idx,
+                name=name,
+                active_id=active_id,
+                base_time=base_time,
+                cycle_elapsed_sec=cycle_elapsed_sec,
+                anomaly_info=anomaly_info
             )
+            event = self._create_phase_event(ctx)
             cycle_events.append(event)
-            if has_anomaly:
-                self._log_ground_truth(event, timing, anom_type)
-
-            cycle_elapsed_sec += duration
+            cycle_elapsed_sec += event.duration_sec
 
         self.simulated_clock_sec += cycle_elapsed_sec
         return cycle_events
@@ -154,14 +183,22 @@ class PressStateMachine:
                     time.sleep(event.duration_sec / real_time_speedup)
                 yield event
 
-if __name__ == "__main__":
+def main():
+    """CLI driver for the extrusion press simulator."""
     parser = argparse.ArgumentParser(description="Run Extrusion Press Simulator.")
-    parser.add_argument("--cycles", type=int, default=100, help="Number of press cycles to simulate")
-    parser.add_argument("--anomaly-prob", type=float, default=0.12, help="Probability of anomaly per cycle")
+    parser.add_argument(
+        "--cycles", type=int, default=100, help="Number of press cycles to simulate"
+    )
+    parser.add_argument(
+        "--anomaly-prob", type=float, default=0.12, help="Probability of anomaly per cycle"
+    )
     parser.add_argument("--seed", type=int, default=42, help="Random seed for reproducibility")
     args = parser.parse_args()
 
-    print(f"Starting Extrusion Press Simulator: {args.cycles} cycles, p(anomaly)={args.anomaly_prob}...")
+    print(
+        f"Starting Extrusion Press Simulator: {args.cycles} cycles, "
+        f"p(anomaly)={args.anomaly_prob}..."
+    )
     cfg = PressConfig()
     inj = AnomalyInjector(anomaly_probability=args.anomaly_prob, seed=args.seed)
     sm = PressStateMachine(config=cfg, injector=inj, seed=args.seed)
@@ -178,6 +215,10 @@ if __name__ == "__main__":
                 anomalies_count += 1
 
     wall_sec = time.time() - start_wall
+    rate = anomalies_count / args.cycles if args.cycles > 0 else 0.0
     print(f"Completed {args.cycles} cycles ({total_events} phase events) in {wall_sec:.2f}s.")
-    print(f"Injected anomalies: {anomalies_count} ({anomalies_count / args.cycles:.2f} anomalies/cycle).")
+    print(f"Injected anomalies: {anomalies_count} ({rate:.2f} anomalies/cycle).")
     print(f"Ground truth written to: {inj.ground_truth_path}")
+
+if __name__ == "__main__":
+    main()

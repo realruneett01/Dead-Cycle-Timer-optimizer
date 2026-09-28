@@ -1,8 +1,7 @@
 """Reusable Plotly charts and visual components for the Extrusion Press Dashboard."""
-import plotly.express as px
-import plotly.graph_objects as go
+from typing import Dict, List
 import pandas as pd
-from typing import Dict, List, Optional
+import plotly.graph_objects as go
 from dashboard.oee_calculator import OEERecoveryMetrics
 
 # Premium industrial color palette tailored for press automation
@@ -18,13 +17,38 @@ COLORS = {
     "card_bg": "#FFFFFF",
 }
 
+def _empty_figure(title: str) -> go.Figure:
+    """Returns a placeholder figure with a specified title."""
+    fig = go.Figure()
+    fig.update_layout(title=title)
+    return fig
+
+
+def _standard_layout(
+    title: str,
+    xaxis_title: str,
+    yaxis_title: str,
+    **extra_layout
+) -> dict:
+    """Constructs uniform Plotly layout dictionary for chart components."""
+    layout = {
+        "title": title,
+        "xaxis_title": xaxis_title,
+        "yaxis_title": yaxis_title,
+        "template": "plotly_white",
+        "height": 380,
+        "margin": {"l": 20, "r": 20, "t": 40, "b": 30},
+        "legend": {"orientation": "h", "yanchor": "bottom", "y": 1.02, "xanchor": "right", "x": 1},
+    }
+    layout.update(extra_layout)
+    return layout
+
+
 def render_phase_waterfall(events: List[Dict]) -> go.Figure:
     """Renders a horizontal phase timeline comparing nominal duration vs. actual excess delay."""
     df = pd.DataFrame(events)
     if df.empty:
-        fig = go.Figure()
-        fig.update_layout(title="No cycle events recorded yet")
-        return fig
+        return _empty_figure("No cycle events recorded yet")
 
     fig = go.Figure()
 
@@ -34,7 +58,7 @@ def render_phase_waterfall(events: List[Dict]) -> go.Figure:
         x=df["nominal_duration"],
         name="Nominal Execution",
         orientation="h",
-        marker=dict(color=COLORS["primary"], opacity=0.85)
+        marker={"color": COLORS["primary"], "opacity": 0.85}
     ))
 
     # Excess delay bar (anomalies)
@@ -44,19 +68,15 @@ def render_phase_waterfall(events: List[Dict]) -> go.Figure:
             x=df["excess_seconds"],
             name="Recoverable Excess Delay",
             orientation="h",
-            marker=dict(color=COLORS["danger"], opacity=0.90)
+            marker={"color": COLORS["danger"], "opacity": 0.90}
         ))
 
-    fig.update_layout(
-        barmode="stack",
+    fig.update_layout(**_standard_layout(
         title="<b>Press Cycle Phase Breakdown (Nominal vs. Excess Delay)</b>",
         xaxis_title="Duration (Seconds)",
         yaxis_title="Phase Name",
-        template="plotly_white",
-        height=380,
-        margin=dict(l=20, r=20, t=40, b=30),
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
-    )
+        barmode="stack"
+    ))
     return fig
 
 def render_phase_duration_scatter(
@@ -68,9 +88,7 @@ def render_phase_duration_scatter(
     """Renders a scatter timeline of durations for a specific phase, highlighting anomalies."""
     phase_df = df[df["phase_name"] == phase_name].copy()
     if phase_df.empty:
-        fig = go.Figure()
-        fig.update_layout(title=f"No telemetry data for {phase_name}")
-        return fig
+        return _empty_figure(f"No telemetry data for {phase_name}")
 
     fig = go.Figure()
 
@@ -99,7 +117,7 @@ def render_phase_duration_scatter(
         y=normal_pts["actual_duration"],
         mode="markers",
         name="Normal Cycle",
-        marker=dict(color=COLORS["primary"], size=7, opacity=0.7)
+        marker={"color": COLORS["primary"], "size": 7, "opacity": 0.7}
     ))
 
     # Anomalous points
@@ -110,29 +128,23 @@ def render_phase_duration_scatter(
             y=anom_pts["actual_duration"],
             mode="markers+text",
             name="Detected Anomaly",
-            marker=dict(color=COLORS["danger"], size=10, symbol="x"),
+            marker={"color": COLORS["danger"], "size": 10, "symbol": "x"},
             text=anom_pts["anomaly_type"],
             textposition="top center"
         ))
 
-    fig.update_layout(
+    fig.update_layout(**_standard_layout(
         title=f"<b>Cycle Duration History: {phase_name}</b>",
         xaxis_title="Cycle Number",
-        yaxis_title="Duration (Seconds)",
-        template="plotly_white",
-        height=380,
-        margin=dict(l=20, r=20, t=40, b=30),
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
-    )
+        yaxis_title="Duration (Seconds)"
+    ))
     return fig
 
 def render_anomaly_breakdown_pie(df: pd.DataFrame) -> go.Figure:
     """Renders a donut chart of detected anomaly classifications."""
     anom_df = df[df["is_anomaly"] & (df["anomaly_type"] != "NONE")]
     if anom_df.empty:
-        fig = go.Figure()
-        fig.update_layout(title="No anomalies detected yet")
-        return fig
+        return _empty_figure("No anomalies detected yet")
 
     counts = anom_df["anomaly_type"].value_counts().reset_index()
     counts.columns = ["anomaly_type", "count"]
@@ -148,24 +160,29 @@ def render_anomaly_breakdown_pie(df: pd.DataFrame) -> go.Figure:
         labels=counts["anomaly_type"],
         values=counts["count"],
         hole=0.45,
-        marker=dict(colors=pie_colors)
+        marker={"colors": pie_colors}
     )])
 
     fig.update_layout(
         title="<b>Anomaly Root-Cause Distribution</b>",
         template="plotly_white",
         height=320,
-        margin=dict(l=20, r=20, t=40, b=20)
+        margin={"l": 20, "r": 20, "t": 40, "b": 20}
     )
     return fig
 
 def render_financial_waterfall(metrics: OEERecoveryMetrics) -> go.Figure:
     """Renders a waterfall chart showing capacity and financial value recovery."""
+    measure_labels = [
+        "Direct Press Cost (€)",
+        "Extruded Tonnage Margin (€)",
+        "Total Annual Benefit (€)"
+    ]
     fig = go.Figure(go.Waterfall(
         name="Value Recovery",
         orientation="v",
         measure=["relative", "relative", "total"],
-        x=["Direct Press Cost (€)", "Extruded Tonnage Margin (€)", "Total Annual Benefit (€)"],
+        x=measure_labels,
         textposition="outside",
         text=[
             f"+€{metrics.annual_direct_cost_savings_eur:,.0f}",
@@ -188,6 +205,6 @@ def render_financial_waterfall(metrics: OEERecoveryMetrics) -> go.Figure:
         showlegend=False,
         template="plotly_white",
         height=360,
-        margin=dict(l=20, r=20, t=40, b=30)
+        margin={"l": 20, "r": 20, "t": 40, "b": 30}
     )
     return fig

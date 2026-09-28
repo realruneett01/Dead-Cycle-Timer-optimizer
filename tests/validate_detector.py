@@ -1,16 +1,19 @@
-"""Benchmark validation script evaluating detector Precision, Recall, F1, and FPR against Ground Truth."""
+"""Benchmark validation script evaluating detector Precision,
+Recall, F1, and FPR against Ground Truth.
+"""
 import json
 import sys
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, Set, Tuple
+from typing import Dict, Optional, Set, Tuple
 
 # Ensure project root is in sys.path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
+# pylint: disable=wrong-import-position
 import pandas as pd
-
 from detector.detector_service import DetectorService
 from simulator.anomaly_injector import AnomalyInjector
 from simulator.press_config import PressConfig
@@ -28,12 +31,34 @@ DETECTORS = {
 Event = Tuple[int, str]
 
 
+@dataclass
+class BenchmarkReportSummary:
+    """Holds summary counts for tabular benchmark reporting."""
+    num_cycles: int
+    warmup_cutoff: int
+    total_events: int
+    gt_count: int
+
+
+@dataclass
+class BenchmarkConfig:
+    """Execution parameters for detector benchmark validation."""
+    num_cycles: int = 600
+    anomaly_prob: float = 0.12
+    seed: int = 42
+    threshold_z: float = 2.75
+    cusum_alpha: float = 0.01
+    cusum_beta: float = 0.05
+    output_dir: Path = PROJECT_ROOT / "data"
+
+
 def score_detector(
     detected: Set[Event],
     gt_set: Set[Event],
     gt_type_map: Dict[Event, str],
     total_events: int
 ) -> dict:
+    # pylint: disable=too-many-locals
     """Computes confusion matrix, headline metrics, and per-class recall for one detector."""
     tp = len(detected & gt_set)
     fp = len(detected - gt_set)
@@ -69,7 +94,8 @@ def score_detector(
     }
 
 
-def print_report(results: dict, num_cycles: int, warmup_cutoff: int, total_events: int, gt_count: int):
+def print_report(results: dict, summary: BenchmarkReportSummary) -> None:
+    """Formats and prints comparative evaluation table across evaluated detectors."""
     scores = [results[key] for key, _ in DETECTORS.values()]
     labels = [label for _, label in DETECTORS.values()]
     width = 24 + 3 * 23
@@ -80,9 +106,12 @@ def print_report(results: dict, num_cycles: int, warmup_cutoff: int, total_event
     print("=" * width)
     print("       DCTO ANOMALY DETECTOR BENCHMARK: BASELINE vs. PAGE'S CUSUM vs. FUSED")
     print("=" * width)
-    print(f"Evaluated Cycles:      {num_cycles - warmup_cutoff} (warmup: {warmup_cutoff} excluded)")
-    print(f"Evaluated Events:      {total_events}")
-    print(f"Ground Truth Anomalies:{gt_count}")
+    print(
+        f"Evaluated Cycles:      {summary.num_cycles - summary.warmup_cutoff} "
+        f"(warmup: {summary.warmup_cutoff} excluded)"
+    )
+    print(f"Evaluated Events:      {summary.total_events}")
+    print(f"Ground Truth Anomalies:{summary.gt_count}")
     print("-" * width)
     row("Metric", labels)
     print("-" * width)
@@ -107,43 +136,42 @@ def print_report(results: dict, num_cycles: int, warmup_cutoff: int, total_event
     print("=" * width)
 
 
-def run_benchmark(
-    num_cycles: int = 600,
-    anomaly_prob: float = 0.12,
-    seed: int = 42,
-    threshold_z: float = 2.75,
-    cusum_alpha: float = 0.01,
-    cusum_beta: float = 0.05,
-    output_dir: Path = PROJECT_ROOT / "data"
-) -> dict:
-    """
-    Executes a benchmark simulation run through DetectorService and scores each of its
-    verdicts (Tier 1 rolling MAD baseline, Page's CUSUM, and the fused decision)
-    against ground-truth injected anomalies.
-    """
-    output_dir = Path(output_dir)
-    output_dir.mkdir(parents=True, exist_ok=True)
-    gt_file = output_dir / "ground_truth.csv"
-    telem_file = output_dir / "telemetry_stream.csv"
-    metrics_file = output_dir / "validation_results.json"
+def _setup_benchmark_environment(
+    config: BenchmarkConfig
+) -> Tuple[Path, Path, Path, PressStateMachine, DetectorService]:
+    """Initializes paths, clears stale artifacts, and sets up state machine and detector."""
+    out_dir = Path(config.output_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    gt_file = out_dir / "ground_truth.csv"
+    telem_file = out_dir / "telemetry_stream.csv"
+    metrics_file = out_dir / "validation_results.json"
 
-    # Ground truth is appended by the injector, so clear the previous run first
     if gt_file.exists():
         gt_file.unlink()
 
-    config = PressConfig()
-    injector = AnomalyInjector(anomaly_probability=anomaly_prob, ground_truth_path=str(gt_file), seed=seed)
-    sm = PressStateMachine(config=config, injector=injector, seed=seed)
-    detector = DetectorService(
-        config=config,
-        telemetry_log_path=str(telem_file),
-        threshold_z=threshold_z,
-        cusum_alpha=cusum_alpha,
-        cusum_beta=cusum_beta
+    press_cfg = PressConfig()
+    injector = AnomalyInjector(
+        anomaly_probability=config.anomaly_prob,
+        ground_truth_path=str(gt_file),
+        seed=config.seed
     )
+    sm = PressStateMachine(config=press_cfg, injector=injector, seed=config.seed)
+    detector = DetectorService(
+        config=press_cfg,
+        telemetry_log_path=str(telem_file),
+        threshold_z=config.threshold_z,
+        cusum_alpha=config.cusum_alpha,
+        cusum_beta=config.cusum_beta
+    )
+    return gt_file, telem_file, metrics_file, sm, detector
 
-    print(f"\n--- Running Benchmark Simulation ({num_cycles} cycles, p={anomaly_prob}, threshold_z={threshold_z}) ---")
 
+def _simulate_cycles(
+    sm: PressStateMachine,
+    detector: DetectorService,
+    num_cycles: int
+) -> None:
+    """Executes state machine cycles and passes events to detector service."""
     for cycle_id in range(1, num_cycles + 1):
         for ev in sm.run_cycle(cycle_id=cycle_id):
             detector.process_phase_event(
@@ -153,8 +181,15 @@ def run_benchmark(
                 is_dead_cycle=ev.is_dead_cycle
             )
 
-    # Exclude initial warmup period (first 25 cycles) for fair evaluation
-    warmup_cutoff = 25
+
+def _evaluate_benchmark(
+    gt_file: Path,
+    telem_file: Path,
+    warmup_cutoff: int,
+    config: BenchmarkConfig
+) -> Tuple[dict, BenchmarkReportSummary]:
+    # pylint: disable=too-many-locals
+    """Computes benchmark metrics from generated telemetry and ground truth logs."""
     df_gt = pd.read_csv(gt_file)
     df_telem = pd.read_csv(telem_file)
     df_gt_eval = df_gt[df_gt["cycle_id"] > warmup_cutoff]
@@ -167,24 +202,57 @@ def run_benchmark(
 
     results = {
         "benchmark_parameters": {
-            "num_cycles": num_cycles,
+            "num_cycles": config.num_cycles,
             "warmup_cycles_excluded": warmup_cutoff,
-            "anomaly_probability": anomaly_prob,
-            "random_seed": seed,
-            "threshold_z": threshold_z,
-            "cusum_alpha": cusum_alpha,
-            "cusum_beta": cusum_beta
+            "anomaly_probability": config.anomaly_prob,
+            "random_seed": config.seed,
+            "threshold_z": config.threshold_z,
+            "cusum_alpha": config.cusum_alpha,
+            "cusum_beta": config.cusum_beta
         }
     }
     for column, (key, _) in DETECTORS.items():
-        flagged = df_telem_eval[df_telem_eval[column] == True]
+        flagged = df_telem_eval[df_telem_eval[column].astype(bool)]
         detected = set(zip(flagged["cycle_id"], flagged["phase_name"]))
         results[key] = score_detector(detected, gt_set, gt_type_map, total_events)
+
+    summary = BenchmarkReportSummary(
+        num_cycles=config.num_cycles,
+        warmup_cutoff=warmup_cutoff,
+        total_events=total_events,
+        gt_count=len(gt_set)
+    )
+    return results, summary
+
+
+def run_benchmark(config: Optional[BenchmarkConfig] = None, **kwargs) -> dict:
+    """
+    Executes a benchmark simulation run through DetectorService and scores each of its
+    verdicts (Tier 1 rolling MAD baseline, Page's CUSUM, and the fused decision)
+    against ground-truth injected anomalies.
+    """
+    if config is None:
+        config = BenchmarkConfig(**kwargs) if kwargs else BenchmarkConfig()
+    elif kwargs:
+        for key, value in kwargs.items():
+            setattr(config, key, value)
+
+    gt_file, telem_file, metrics_file, sm, detector = _setup_benchmark_environment(config)
+
+    print(
+        f"\n--- Running Benchmark Simulation ({config.num_cycles} cycles, "
+        f"p={config.anomaly_prob}, threshold_z={config.threshold_z}) ---"
+    )
+
+    _simulate_cycles(sm, detector, config.num_cycles)
+
+    warmup_cutoff = 25
+    results, summary = _evaluate_benchmark(gt_file, telem_file, warmup_cutoff, config)
 
     with open(metrics_file, "w", encoding="utf-8") as f:
         json.dump(results, f, indent=2)
 
-    print_report(results, num_cycles, warmup_cutoff, total_events, len(gt_set))
+    print_report(results, summary)
     print(f"Metrics saved to: {metrics_file}\n")
 
     return results

@@ -1,5 +1,4 @@
 """End-to-end integration test verifying the complete DCTO pipeline."""
-import pytest
 from dashboard.oee_calculator import OEECalculator, PlantParameters
 from detector.detector_service import DetectorService
 from simulator.anomaly_injector import AnomalyInjector
@@ -7,11 +6,17 @@ from simulator.press_config import PressConfig
 from simulator.press_state_machine import PressStateMachine
 
 def test_full_pipeline_execution(tmp_path):
-    """Verifies that simulator, anomaly injector, detector service, and OEE calculator integrate seamlessly."""
+    """Verifies that simulator, injector, detector service,
+    and OEE calculator integrate seamlessly.
+    """
     config = PressConfig()
     injector = AnomalyInjector(anomaly_probability=0.20, seed=101)
     sm = PressStateMachine(config=config, injector=injector, seed=101)
-    detector = DetectorService(config=config, telemetry_log_path=str(tmp_path / "telemetry.csv"), threshold_z=2.75)
+    detector = DetectorService(
+        config=config,
+        telemetry_log_path=str(tmp_path / "telemetry.csv"),
+        threshold_z=2.75
+    )
     calculator = OEECalculator(params=PlantParameters())
 
     total_events = 0
@@ -57,6 +62,7 @@ def test_full_pipeline_execution(tmp_path):
     assert metrics.oee_availability_gain_pct > 0.0
 
 def test_detector_service_starts_fresh_log_each_session(tmp_path):
+    """Verifies that DetectorService truncates previous log by default and appends on opt-in."""
     log_path = tmp_path / "telemetry.csv"
     for _ in range(2):
         service = DetectorService(telemetry_log_path=str(log_path))

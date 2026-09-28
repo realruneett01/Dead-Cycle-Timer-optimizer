@@ -5,7 +5,7 @@
 
 [![Python 3.11](https://img.shields.io/badge/Python-3.11-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
 [![OPC-UA](https://img.shields.io/badge/IEC_62541-OPC--UA-005C8A?style=for-the-badge&logo=industrial-shields&logoColor=white)](https://opcfoundation.org/)
-[![Tests](https://img.shields.io/badge/Pytest-16_Passed-10B981?style=for-the-badge&logo=pytest&logoColor=white)](tests/)
+[![Tests](https://img.shields.io/badge/Pytest-18_Passed-10B981?style=for-the-badge&logo=pytest&logoColor=white)](tests/)
 [![Precision](https://img.shields.io/badge/Precision-95.42%25_(Page_CUSUM)-2563EB?style=for-the-badge)](#-empirical-benchmark-validation-baseline-vs-pages-cusum)
 [![Recall](https://img.shields.io/badge/Recall-98.32%25-059669?style=for-the-badge)](#-empirical-benchmark-validation-baseline-vs-pages-cusum)
 [![F1-Score](https://img.shields.io/badge/F1_Score-0.9685-7C3AED?style=for-the-badge)](#-empirical-benchmark-validation-baseline-vs-pages-cusum)
@@ -227,6 +227,14 @@ $$\min_{\mathcal{T}} \sum_{k=0}^{K} \mathcal{C}\left(y_{\tau_k : \tau_{k+1}}\rig
 ### 4. Tier 3: Gaussian Hidden Markov Model (HMM)
 A 3-state Gaussian HMM decodes unobserved machine health states via the Viterbi dynamic programming algorithm (State 0: Healthy, State 1: Creeping Wear, State 2: Transient Stall).
 
+### 5. Production Online Learning & Edge Deployment Architecture
+When deployed on an edge Industrial PC (e.g. Siemens IPC427E or Beckhoff CX2040) alongside the plant PLC, DCTO operates as an active learning system that continually adapts to real-world press operations:
+- **Continuous Statistical Learning:** Verified non-anomalous cycle durations continuously update running median and MAD baselines, absorbing ambient thermal drift without manual re-tuning.
+- **Fault Anti-Poisoning Quarantine:** Flagged delays are strictly excluded from rolling baselines, ensuring mechanical degradation cannot mask itself over time.
+- **Online Regime Adaptation (`adapt_to_new_regime`):** When tooling, dies, or alloy recipes change, the system can instantly re-center all statistical priors, CUSUM accumulators, and HMM emissions over a reference batch.
+- **Numerical & Sensor Guardrails:** All models enforce strict mathematical input validation rejecting `NaN`, `Inf`, and non-positive sensor spikes, bounded SPRT increments, and positive variance regularization floors ($\sigma_{\min} > 0$).
+- **Zero-Data-Loss Model Persistence:** Complete multi-tier detector state (running medians, MAD arrays, CUSUM accumulators, HMM parameters, and wear latches) can be serialized and restored via JSON checkpoints (`save_model_checkpoint` / `load_model_checkpoint`), guaranteeing state survival across edge machine reboots.
+
 ---
 
 ## 📁 Repository Structure
@@ -264,7 +272,7 @@ Dead-Cycle-Timer-optimizer/
 │   ├── smoke_test.py                           # Environment & import verification
 │   ├── test_simulator.py                       # Timing, bounds, and ground truth tests
 │   ├── test_opcua.py                           # Server & client subscription integration tests
-│   ├── test_detector.py                        # Statistical, CUSUM & algorithm unit tests
+│   ├── test_detector.py                        # Statistical, CUSUM, mathematical guards & checkpoint tests
 │   ├── test_end_to_end.py                      # Full pipeline integration test
 │   └── validate_detector.py                    # Side-by-side benchmark comparison script
 │
@@ -294,11 +302,11 @@ pip install -r requirements.txt
 ```
 
 ### 2. Run Automated Test Suite
-Execute the 16 unit and integration tests covering simulation, CUSUM detector, OPC-UA protocol exchange, and statistical algorithms:
+Execute the 18 unit and integration tests covering simulation, CUSUM detector, OPC-UA protocol exchange, statistical algorithms, mathematical NaN guardrails, and checkpoint persistence:
 ```powershell
 pytest -v
 ```
-*Expected: 16 passed in ~7 seconds.*
+*Expected: 18 passed in ~6 seconds.*
 
 ### 3. Run Benchmark Validation Harness
 Execute the 600-cycle validation harness to reproduce the side-by-side comparison report:

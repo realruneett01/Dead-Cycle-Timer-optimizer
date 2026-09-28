@@ -1,18 +1,11 @@
 """Verification test client for subscribing to OPC-UA press telemetry."""
-import argparse
 import asyncio
 import logging
 import sys
 from pathlib import Path
-from typing import List
-
-# Ensure project root is in sys.path when executed directly
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
-if str(PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(PROJECT_ROOT))
 
 from asyncua import Client
-from opcua.opcua_nodes import NAMESPACE_URI
+import opcua.opcua_nodes as nodes
 
 logger = logging.getLogger("OPCUAClient")
 
@@ -26,37 +19,48 @@ class PressSubscriptionHandler:
         self.done_event = asyncio.Event()
 
     def datachange_notification(self, node, val, data):
+        # pylint: disable=unused-argument
+        """Callback invoked by asyncua on node value change."""
         self.notification_count += 1
         name = self.node_names.get(str(node), str(node))
-        logger.info(f"[TELEMETRY UPDATE #{self.notification_count:03d}] Node: {name:<22} => Value: {val}")
-        
+        logger.info(
+            "[TELEMETRY UPDATE #%03d] Node: %-22s => Value: %s",
+            self.notification_count, name, val
+        )
+
         if self.notification_count >= self.max_notifications:
             self.done_event.set()
 
     def event_notification(self, event):
-        pass
+        # pylint: disable=unused-argument
+        """Callback for event notifications."""
 
 async def run_client(
-    endpoint: str = "opc.tcp://127.0.0.1:4840/freeopcua/server/",
+    endpoint: str = nodes.DEFAULT_OPCUA_ENDPOINT,
     max_events: int = 20
 ):
+    # pylint: disable=too-many-locals
     """Connects to server, subscribes to key nodes, and logs incoming events."""
-    logger.info(f"Connecting to OPC-UA server at {endpoint}...")
-    
+    logger.info("Connecting to OPC-UA server at %s...", endpoint)
+
     async with Client(url=endpoint) as client:
         # Resolve namespace index
-        ns_idx = await client.get_namespace_index(NAMESPACE_URI)
-        logger.info(f"Resolved namespace '{NAMESPACE_URI}' to index {ns_idx}")
+        ns_idx = await client.get_namespace_index(nodes.NAMESPACE_URI)
+        logger.info("Resolved namespace '%s' to index %s", nodes.NAMESPACE_URI, ns_idx)
 
         # Locate target nodes
-        root = client.nodes.root
         objects = client.nodes.objects
-        
-        # Navigate to Industrial_Plant/Press_01/State
-        phase_node = await objects.get_child([f"{ns_idx}:Industrial_Plant", f"{ns_idx}:Press_01", f"{ns_idx}:State", f"{ns_idx}:CurrentPhase"])
-        cycle_node = await objects.get_child([f"{ns_idx}:Industrial_Plant", f"{ns_idx}:Press_01", f"{ns_idx}:State", f"{ns_idx}:CycleNumber"])
-        duration_node = await objects.get_child([f"{ns_idx}:Industrial_Plant", f"{ns_idx}:Press_01", f"{ns_idx}:State", f"{ns_idx}:PhaseDuration"])
-        stall_node = await objects.get_child([f"{ns_idx}:Industrial_Plant", f"{ns_idx}:Press_01", f"{ns_idx}:Diagnostics", f"{ns_idx}:ActiveStallFlag"])
+
+        # Navigate to target paths
+        phase_path = nodes.get_press_node_path(ns_idx, "State", "CurrentPhase")
+        cycle_path = nodes.get_press_node_path(ns_idx, "State", "CycleNumber")
+        dur_path = nodes.get_press_node_path(ns_idx, "State", "PhaseDuration")
+        stall_path = nodes.get_press_node_path(ns_idx, "Diagnostics", "ActiveStallFlag")
+
+        phase_node = await objects.get_child(phase_path)
+        cycle_node = await objects.get_child(cycle_path)
+        duration_node = await objects.get_child(dur_path)
+        stall_node = await objects.get_child(stall_path)
 
         node_map = {
             str(phase_node): "CurrentPhase",
@@ -68,9 +72,11 @@ async def run_client(
         # Create subscription
         handler = PressSubscriptionHandler(node_names=node_map, max_notifications=max_events)
         sub = await client.create_subscription(50, handler)
-        
+
         await sub.subscribe_data_change([phase_node, cycle_node, duration_node, stall_node])
-        logger.info(f"Subscribed to 4 nodes. Waiting for {max_events} telemetry updates...")
+        logger.info(
+            "Subscribed to 4 nodes. Waiting for %d telemetry updates...", max_events
+        )
 
         try:
             await asyncio.wait_for(handler.done_event.wait(), timeout=30.0)
@@ -81,13 +87,15 @@ async def run_client(
         await sub.delete()
 
 def main():
-    parser = argparse.ArgumentParser(description="Test client for OPC-UA Server.")
-    parser.add_argument("--port", type=int, default=4840, help="Port of OPC-UA server")
-    parser.add_argument("--events", type=int, default=20, help="Number of telemetry events to capture")
+    """CLI driver for running the verification test client."""
+    parser = nodes.create_port_parser("Test client for OPC-UA Server.")
+    parser.add_argument(
+        "--events", type=int, default=20, help="Number of telemetry events to capture"
+    )
     args = parser.parse_args()
-
-    endpoint = f"opc.tcp://127.0.0.1:{args.port}/freeopcua/server/"
+    endpoint = nodes.build_opcua_endpoint(args.port)
     asyncio.run(run_client(endpoint=endpoint, max_events=args.events))
+
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] Client: %(message)s")

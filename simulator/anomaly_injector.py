@@ -1,21 +1,24 @@
 """Deterministic industrial anomaly injection engine for Extrusion Press simulation."""
 import csv
-import os
 import random
 from dataclasses import dataclass
-from datetime import datetime
 from enum import Enum
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 class AnomalyType(str, Enum):
+    """Categorical classification of simulated hydraulic and mechanical faults."""
     NONE = "NONE"
-    VALVE_OVERLAP = "VALVE_OVERLAP"       # Transient interlock/command overlap delay (+0.2s to +0.6s)
-    MICRO_STALL = "MICRO_STALL"           # Sudden spool stick-slip or proximity bounce (+0.4s to +1.2s)
-    CREEPING_WEAR = "CREEPING_WEAR"       # Progressive seal degradation or pilot clogging (+1.5%/cycle)
+    # Transient interlock/command overlap delay (+0.2s to +0.6s)
+    VALVE_OVERLAP = "VALVE_OVERLAP"
+    # Sudden spool stick-slip or proximity bounce (+0.4s to +1.2s)
+    MICRO_STALL = "MICRO_STALL"
+    # Progressive seal degradation or pilot clogging (+1.5%/cycle)
+    CREEPING_WEAR = "CREEPING_WEAR"
 
 @dataclass
 class AnomalyEvent:
+    """Ground truth audit event recorded for every injected physical anomaly."""
     cycle_id: int
     timestamp: str
     phase_name: str
@@ -26,7 +29,7 @@ class AnomalyEvent:
 
 class AnomalyInjector:
     """Injects calibrated failure modes and logs ground truth for benchmark validation."""
-    
+
     def __init__(
         self,
         anomaly_probability: float = 0.12,
@@ -35,7 +38,7 @@ class AnomalyInjector:
     ):
         self.anomaly_probability = anomaly_probability
         self.rng = random.Random(seed)
-        
+
         # Ground truth file path
         if ground_truth_path is None:
             base_dir = Path(__file__).resolve().parent.parent / "data"
@@ -44,7 +47,7 @@ class AnomalyInjector:
         else:
             self.ground_truth_path = Path(ground_truth_path)
             self.ground_truth_path.parent.mkdir(parents=True, exist_ok=True)
-            
+
         # Creeping wear active state: (phase_name, start_cycle, total_cycles, current_drift_pct)
         self.active_wear_drift: Optional[Dict] = None
         self._init_csv()
@@ -64,7 +67,9 @@ class AnomalyInjector:
                     "actual_duration"
                 ])
 
-    def _evaluate_active_wear(self, cycle_id: int) -> Optional[Tuple[str, Tuple[AnomalyType, float]]]:
+    def _evaluate_active_wear(
+        self, cycle_id: int
+    ) -> Optional[Tuple[str, Tuple[AnomalyType, float]]]:
         """Calculates delay if a creeping wear progression is active, or clears it when finished."""
         if self.active_wear_drift is None:
             return None
@@ -73,7 +78,7 @@ class AnomalyInjector:
         step = cycle_id - self.active_wear_drift["start_cycle"]
         total_steps = self.active_wear_drift["total_cycles"]
 
-        if not (0 <= step < total_steps):
+        if not 0 <= step < total_steps:
             self.active_wear_drift = None
             return None
 
@@ -84,7 +89,9 @@ class AnomalyInjector:
         delay = round(nominal * cumulative_pct, 3)
         return phase, (AnomalyType.CREEPING_WEAR, delay)
 
-    def _create_creeping_wear(self, cycle_id: int) -> Optional[Tuple[str, Tuple[AnomalyType, float]]]:
+    def _create_creeping_wear(
+        self, cycle_id: int
+    ) -> Optional[Tuple[str, Tuple[AnomalyType, float]]]:
         """Initializes a new creeping wear progression."""
         if self.active_wear_drift is not None:
             return None
@@ -117,7 +124,9 @@ class AnomalyInjector:
         )[0]
 
         if choice == AnomalyType.VALVE_OVERLAP:
-            target_phase = self.rng.choice(["container_shift_open", "shear_stroke", "container_shift_close"])
+            target_phase = self.rng.choice(
+                ["container_shift_open", "shear_stroke", "container_shift_close"]
+            )
             delay = round(self.rng.uniform(0.35, 0.70), 3)
             return target_phase, (AnomalyType.VALVE_OVERLAP, delay)
 
@@ -131,8 +140,9 @@ class AnomalyInjector:
     def evaluate_cycle_anomalies(
         self,
         cycle_id: int,
-        phases: List[str]
+        phases: Optional[List[str]] = None
     ) -> Dict[str, Tuple[AnomalyType, float]]:
+        # pylint: disable=unused-argument
         """
         Determines if any anomaly should be injected for each phase of a given cycle.
         Returns a dict: {phase_name: (AnomalyType, injected_delay_sec)}
