@@ -52,6 +52,22 @@ def test_hmm_detector():
     decoded_stall = hmm_det.decode_sequence(stalled_seq)
     assert decoded_stall[-1] in (1, 2)
 
+def test_hmm_fit_orders_states_by_mean():
+    rng = np.random.default_rng(0)
+    durations = list(np.concatenate([
+        rng.normal(2.5, 0.05, 60),
+        rng.normal(3.0, 0.05, 20),
+        rng.normal(3.75, 0.10, 10),
+    ]))
+    hmm_det = HMMDetector(n_states=3, random_state=42)
+    hmm_det.fit(durations)
+
+    means = hmm_det.model.means_.flatten()
+    assert list(means) == sorted(means)
+    decoded = hmm_det.decode_sequence(durations)
+    assert decoded[0] == 0
+    assert decoded[-1] == 2
+
 def test_page_cusum_detector():
     from detector.cusum_detector import PageCusumDetector
     cusum = PageCusumDetector(alpha=0.01, beta=0.05, default_delta_sec=0.35, min_baseline_samples=10)
@@ -87,3 +103,32 @@ def test_page_cusum_detector():
             
     assert alarm_fired, "Page CUSUM failed to trigger on consecutive +0.45s delays"
 
+
+def test_rolling_baseline_rebaseline_after_permanent_shift():
+    detector = RollingBaselineDetector(window_size=30, threshold_z=2.5, min_samples_to_flag=10, min_excess_sec=0.15)
+    for c in range(1, 20):
+        detector.update_and_detect(cycle_id=c, phase_name="die_slide_check", duration=1.80)
+
+    # A permanent +0.6s shift (e.g. new die) keeps alarming against the old baseline
+    assert detector.update_and_detect(cycle_id=20, phase_name="die_slide_check", duration=2.40).is_anomaly
+
+    detector.rebaseline("die_slide_check")
+    for c in range(21, 35):
+        res = detector.update_and_detect(cycle_id=c, phase_name="die_slide_check", duration=2.40)
+    assert not res.is_anomaly
+    assert res.baseline_median == 2.40
+
+def test_rolling_baseline_opt_in_adaptation():
+    detector = RollingBaselineDetector(
+        window_size=20, threshold_z=2.5, min_samples_to_flag=10,
+        min_excess_sec=0.15, adapt_after_consecutive=3
+    )
+    for c in range(1, 15):
+        detector.update_and_detect(cycle_id=c, phase_name="billet_load", duration=3.20)
+
+    flags = [
+        detector.update_and_detect(cycle_id=c, phase_name="billet_load", duration=3.80).is_anomaly
+        for c in range(15, 45)
+    ]
+    assert flags[0]
+    assert not flags[-1], "Baseline should have absorbed the sustained shift"

@@ -196,7 +196,7 @@ with tab1:
     col_wf, col_summary = st.columns([2, 1])
     with col_wf:
         fig_wf = render_phase_waterfall(cycle_events_df.to_dict(orient="records"))
-        st.plotly_chart(fig_wf, use_container_width=True)
+        st.plotly_chart(fig_wf, width="stretch")
 
     with col_summary:
         st.markdown(f"### Cycle #{latest_cycle_id} Summary")
@@ -214,7 +214,7 @@ with tab1:
         st.dataframe(
             cycle_events_df[["phase_name", "actual_duration", "nominal_duration", "is_anomaly", "anomaly_type"]],
             hide_index=True,
-            use_container_width=True
+            width="stretch"
         )
 
 # ----------------- TAB 2: DIAGNOSTICS -----------------
@@ -224,7 +224,7 @@ with tab2:
     col_pie, col_scatter = st.columns([1, 2])
     with col_pie:
         fig_pie = render_anomaly_breakdown_pie(telemetry_df)
-        st.plotly_chart(fig_pie, use_container_width=True)
+        st.plotly_chart(fig_pie, width="stretch")
         st.caption("Distribution of flagged industrial failure modes across analyzed cycles.")
 
     with col_scatter:
@@ -242,13 +242,13 @@ with tab2:
             nominal_sec=phase_nominal,
             threshold_sec=threshold_val
         )
-        st.plotly_chart(fig_scatter, use_container_width=True)
+        st.plotly_chart(fig_scatter, width="stretch")
 
     st.subheader("Flagged Anomaly Audit Log (Last 15 Incidents)")
     anom_table = telemetry_df[telemetry_df["is_anomaly"]].tail(15)[
         ["cycle_id", "phase_name", "actual_duration", "baseline_median", "robust_z_score", "excess_seconds", "anomaly_type"]
     ]
-    st.dataframe(anom_table, hide_index=True, use_container_width=True)
+    st.dataframe(anom_table, hide_index=True, width="stretch")
 
 # ----------------- TAB 3: OEE & FINANCIAL MODEL -----------------
 with tab3:
@@ -265,7 +265,7 @@ with tab3:
     col_fin1, col_fin2 = st.columns([1, 1])
     with col_fin1:
         fig_fin = render_financial_waterfall(metrics)
-        st.plotly_chart(fig_fin, use_container_width=True)
+        st.plotly_chart(fig_fin, width="stretch")
 
     with col_fin2:
         st.markdown("### Operational Capacity Breakdown")

@@ -6,12 +6,12 @@ from simulator.anomaly_injector import AnomalyInjector
 from simulator.press_config import PressConfig
 from simulator.press_state_machine import PressStateMachine
 
-def test_full_pipeline_execution():
+def test_full_pipeline_execution(tmp_path):
     """Verifies that simulator, anomaly injector, detector service, and OEE calculator integrate seamlessly."""
     config = PressConfig()
     injector = AnomalyInjector(anomaly_probability=0.20, seed=101)
     sm = PressStateMachine(config=config, injector=injector, seed=101)
-    detector = DetectorService(config=config, threshold_z=2.75)
+    detector = DetectorService(config=config, telemetry_log_path=str(tmp_path / "telemetry.csv"), threshold_z=2.75)
     calculator = OEECalculator(params=PlantParameters())
 
     total_events = 0
@@ -55,3 +55,16 @@ def test_full_pipeline_execution():
     assert metrics.annual_direct_cost_savings_eur > 0.0
     assert metrics.annual_additional_tonnage_mt > 0.0
     assert metrics.oee_availability_gain_pct > 0.0
+
+def test_detector_service_starts_fresh_log_each_session(tmp_path):
+    log_path = tmp_path / "telemetry.csv"
+    for _ in range(2):
+        service = DetectorService(telemetry_log_path=str(log_path))
+        service.process_phase_event(cycle_id=1, phase_name="decompression", duration=2.2)
+
+    lines = log_path.read_text(encoding="utf-8").strip().splitlines()
+    assert len(lines) == 2, "Second session must not append to the first session's rows"
+
+    resumed = DetectorService(telemetry_log_path=str(log_path), append_to_log=True)
+    resumed.process_phase_event(cycle_id=2, phase_name="decompression", duration=2.2)
+    assert len(log_path.read_text(encoding="utf-8").strip().splitlines()) == 3

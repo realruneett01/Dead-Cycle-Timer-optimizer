@@ -2,6 +2,7 @@
 from typing import List, Optional
 import numpy as np
 from hmmlearn import hmm
+from sklearn.cluster import KMeans
 
 class HMMDetector:
     """
@@ -65,15 +66,33 @@ class HMMDetector:
             n_components=self.n_states,
             covariance_type="diag",
             n_iter=100,
-            random_state=self.random_state
+            random_state=self.random_state,
+            init_params="st"
         )
+        # hmmlearn's default init gives every state the global variance, which lets
+        # EM merge the wear and stall regimes. Seed each state from its k-means
+        # cluster instead so EM starts from distinct nominal/wear/stall regimes.
+        centers = np.sort(
+            KMeans(n_clusters=self.n_states, n_init=10, random_state=self.random_state)
+            .fit(X).cluster_centers_.ravel()
+        )
+        labels = np.searchsorted((centers[1:] + centers[:-1]) / 2.0, X.ravel())
+        self.model.means_ = centers.reshape(-1, 1)
+        cluster_vars = [
+            float(np.var(X[labels == k])) if np.any(labels == k) else float(np.var(X))
+            for k in range(self.n_states)
+        ]
+        self.model.covars_ = np.array([[max(v, 1e-4)] for v in cluster_vars])
         self.model.fit(X)
 
         # Sort hidden states by ascending mean so State 0 is always lowest mean (Nominal)
         means = self.model.means_.flatten()
         order = np.argsort(means)
         self.model.means_ = self.model.means_[order]
-        self.model.covars_ = self.model.covars_[order]
+        # The covars_ getter returns full (n, d, d) matrices, but the "diag" setter
+        # expects (n, d), so reduce each matrix to its diagonal before reordering.
+        diag_covars = np.array([np.diag(c) for c in self.model.covars_])
+        self.model.covars_ = diag_covars[order]
         self.model.transmat_ = self.model.transmat_[order][:, order]
         self.model.startprob_ = self.model.startprob_[order]
 

@@ -19,6 +19,24 @@ class ChangepointDetector:
         self.penalty = penalty
         self.model = model
 
+    def _fit_pelt(self, signal: np.ndarray, pen: float) -> Optional[List[int]]:
+        """Fits Pelt model and returns changepoints, or None on numerical/parameter failure."""
+        try:
+            algo = rpt.Pelt(model=self.model, min_size=self.min_size, jump=1).fit(signal)
+            result = algo.predict(pen=pen)
+            return [cp for cp in result if cp < len(signal)]
+        except (ValueError, TypeError, np.linalg.LinAlgError, rpt.exceptions.BadSegmentationParameters, rpt.exceptions.NotEnoughPoints, RuntimeError):
+            return None
+
+    def _fit_binseg(self, signal: np.ndarray, pen: float) -> List[int]:
+        """Fallback changepoint estimation using Binseg if Pelt fails."""
+        try:
+            algo = rpt.Binseg(model="l2", min_size=self.min_size).fit(signal)
+            result = algo.predict(pen=pen)
+            return [cp for cp in result if cp < len(signal)]
+        except (ValueError, TypeError, np.linalg.LinAlgError, rpt.exceptions.BadSegmentationParameters, rpt.exceptions.NotEnoughPoints, RuntimeError):
+            return []
+
     def find_changepoints(
         self,
         durations: List[float],
@@ -34,21 +52,11 @@ class ChangepointDetector:
         pen = custom_penalty if custom_penalty is not None else self.penalty
         signal = np.array(durations).reshape(-1, 1)
 
-        try:
-            # Pelt with Radial Basis Function kernel
-            algo = rpt.Pelt(model=self.model, min_size=self.min_size, jump=1).fit(signal)
-            result = algo.predict(pen=pen)
-            # ruptures returns boundary indices where the last element is len(signal)
-            changepoints = [cp for cp in result if cp < len(signal)]
+        changepoints = self._fit_pelt(signal, pen)
+        if changepoints is not None:
             return changepoints
-        except Exception:
-            # Fallback to Binseg if Pelt encounters numerical instability
-            try:
-                algo = rpt.Binseg(model="l2", min_size=self.min_size).fit(signal)
-                result = algo.predict(pen=pen)
-                return [cp for cp in result if cp < len(signal)]
-            except Exception:
-                return []
+
+        return self._fit_binseg(signal, pen)
 
     def evaluate_drift_regime(
         self,

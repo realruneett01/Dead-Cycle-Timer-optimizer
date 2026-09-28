@@ -26,3 +26,11 @@ Thumbs.db
 LIMITATIONS.md
 data/
 scripts/
+
+# Agent & Local Tool Metadata
+.claude/
+.repowise/
+.antigravity*
+claude-session-history.md
+.mcp.json
+

@@ -5,7 +5,7 @@
 
 [![Python 3.11](https://img.shields.io/badge/Python-3.11-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
 [![OPC-UA](https://img.shields.io/badge/IEC_62541-OPC--UA-005C8A?style=for-the-badge&logo=industrial-shields&logoColor=white)](https://opcfoundation.org/)
-[![Tests](https://img.shields.io/badge/Pytest-12_Passed-10B981?style=for-the-badge&logo=pytest&logoColor=white)](tests/)
+[![Tests](https://img.shields.io/badge/Pytest-16_Passed-10B981?style=for-the-badge&logo=pytest&logoColor=white)](tests/)
 [![Precision](https://img.shields.io/badge/Precision-95.42%25_(Page_CUSUM)-2563EB?style=for-the-badge)](#-empirical-benchmark-validation-baseline-vs-pages-cusum)
 [![Recall](https://img.shields.io/badge/Recall-98.32%25-059669?style=for-the-badge)](#-empirical-benchmark-validation-baseline-vs-pages-cusum)
 [![F1-Score](https://img.shields.io/badge/F1_Score-0.9685-7C3AED?style=for-the-badge)](#-empirical-benchmark-validation-baseline-vs-pages-cusum)
@@ -136,9 +136,9 @@ Every injected anomaly is logged with cycle index, phase name, true excess delay
 
 ---
 
-## 🎯 Empirical Benchmark Validation: Baseline vs. Page's CUSUM
+## 🎯 Empirical Benchmark Validation: Baseline vs. Page's CUSUM vs. Fused Service
 
-Both detectors were evaluated head-to-head on the 600-cycle benchmark dataset (575 post-warmup cycles, 4,600 evaluated events, 297 ground-truth anomalies). Run the validation script live at any time via:
+All three verdicts produced by `DetectorService` were scored head-to-head on the 600-cycle benchmark dataset (575 post-warmup cycles, 4,600 evaluated events, 297 ground-truth anomalies): the Tier 1 rolling MAD baseline on its own, Page's CUSUM on its own, and the fused decision the service actually emits (CUSUM alarm OR confirmed changepoint drift OR HMM wear/stall state). Run the validation script live at any time via:
 ```powershell
 python tests/validate_detector.py
 ```
@@ -147,21 +147,27 @@ python tests/validate_detector.py
 
 ### Side-by-Side Performance Scorecard
 
-| Evaluation Metric | Rolling MAD Baseline | **Page's CUSUM (SPRT-Grounded)** | Delta / Improvement | Status |
-|---|---|---|---|---|
-| **True Positives (TP)** | 293 | **292** | -1 | ✅ High Sensitivity |
-| **False Positives (FP)** | 38 | **14** | **-63.2% Reduction** | 🛡️ Slashes False Alarms |
-| **False Negatives (FN)** | 4 | **5** | +1 | ✅ Minimal Missed Faults |
-| **True Negatives (TN)** | 4,265 | **4,289** | +24 | ✅ High Specificity |
-| **Precision** | 88.52% | **95.42%** | **+6.90%** | ✅ **SUPERIOR** |
-| **Recall (Sensitivity)** | **98.65%** | **98.32%** | -0.33% | ✅ **PASSED** |
-| **F1-Score** | 0.9331 | **0.9685** | **+0.0354** | ✅ **PASSED** |
-| **False Positive Rate (FPR)** | 0.88% | **0.33%** | **-62.5% Reduction** | ✅ **PASSED** |
+| Evaluation Metric | Rolling MAD Baseline | Page's CUSUM (SPRT-Grounded) | **Fused Service (Production)** |
+|---|---|---|---|
+| **True Positives (TP)** | 293 | 292 | **293** |
+| **False Positives (FP)** | 36 | **14** | 16 |
+| **False Negatives (FN)** | 4 | 5 | **4** |
+| **True Negatives (TN)** | 4,267 | **4,289** | 4,287 |
+| **Precision** | 89.06% | **95.42%** | 94.82% |
+| **Recall (Sensitivity)** | **98.65%** | 98.32% | **98.65%** |
+| **Macro Recall (mean of per-class recall)** | **94.80%** | 93.04% | **94.80%** |
+| **F1-Score** | 0.9361 | **0.9685** | 0.9670 |
+| **False Positive Rate (FPR)** | 0.84% | **0.33%** | 0.37% |
+
+CUSUM cuts false positives by 61% relative to the MAD baseline. Fusing it with the changepoint and HMM tiers recovers the micro-stall CUSUM misses on its own, so the production service keeps the baseline's recall at close to CUSUM's precision.
 
 ### Per-Class Detection Recall Breakdown
-- 🟢 **Creeping Wear Sequences (`CREEPING_WEAR`):** **100.0%** (249 / 249 cycles captured by both)
-- 🔵 **Valve Overlap Delays (`VALVE_OVERLAP`):** **89.7%** (26 / 29 delays detected by both)
-- 🟡 **Micro-Stalls & Stick-Slip (`MICRO_STALL`):** **89.5% CUSUM** (17 / 19) vs. **94.7% Baseline** (18 / 19)
+- 🟢 **Creeping Wear Sequences (`CREEPING_WEAR`):** **100.0%** (249 / 249 cycles captured by all three)
+- 🔵 **Valve Overlap Delays (`VALVE_OVERLAP`):** **89.7%** (26 / 29 delays detected by all three)
+- 🟡 **Micro-Stalls & Stick-Slip (`MICRO_STALL`):** **94.7% Baseline & Fused** (18 / 19) vs. **89.5% CUSUM** (17 / 19)
+
+> [!IMPORTANT]
+> **Read the headline numbers with the class mix in mind.** 249 of the 297 ground-truth events are cycles inside creeping-wear sequences, which every detector catches. The event-weighted precision and recall above are therefore dominated by that easy class; the macro recall row weights the three fault classes equally and is the fairer measure of transient-fault sensitivity.
 
 > [!NOTE]
 > **Why 3 Valve Overlap delays were missed:** In phases with higher inherent baseline variance (`billet_load`, $\sigma = 0.14\text{s}$), a small injected delay of $+0.35\text{s}$ coincided with a negative stochastic draw ($-0.11\text{s}$), leaving an effective excess delay of only $+0.24\text{s}$. On pure phase-duration residuals, that cannot be statistically separated from normal machine jitter without lowering the decision boundary and inflating false alarms.
@@ -262,7 +268,7 @@ Dead-Cycle-Timer-optimizer/
 │   ├── test_end_to_end.py                      # Full pipeline integration test
 │   └── validate_detector.py                    # Side-by-side benchmark comparison script
 │
-├── requirements.txt                            # Pinned Python dependencies
+├── requirements.txt                            # Python dependencies (minimum versions; numpy < 2 requires Python ≤ 3.12)
 ├── .gitignore                                  # Git ignore specifications
 ├── LICENSE                                     # MIT License
 └── README.md                                   # Technical documentation & project portfolio
@@ -283,23 +289,23 @@ cd Dead-Cycle-Timer-optimizer
 py -3.11 -m venv .venv
 .\.venv\Scripts\Activate.ps1
 
-# Install pinned dependencies
+# Install dependencies (Python 3.11 or 3.12 — numpy < 2.0 has no wheels for 3.13+)
 pip install -r requirements.txt
 ```
 
 ### 2. Run Automated Test Suite
-Execute the 12 unit and integration tests covering simulation, CUSUM detector, OPC-UA protocol exchange, and statistical algorithms:
+Execute the 16 unit and integration tests covering simulation, CUSUM detector, OPC-UA protocol exchange, and statistical algorithms:
 ```powershell
 pytest -v
 ```
-*Expected: 12 passed in ~6 seconds.*
+*Expected: 16 passed in ~7 seconds.*
 
 ### 3. Run Benchmark Validation Harness
 Execute the 600-cycle validation harness to reproduce the side-by-side comparison report:
 ```powershell
 python tests/validate_detector.py
 ```
-*Prints comparative confusion matrices, Precision (95.42% CUSUM vs. 88.52% Baseline), Recall, and per-class breakdowns.*
+*Prints comparative confusion matrices, Precision (89.06% Baseline, 95.42% CUSUM, 94.82% Fused), Recall, and per-class breakdowns.*
 
 ### 4. Run OPC-UA Industrial Server & Edge Client
 Start the asynchronous IEC 62541 OPC-UA server publishing ISA-95 node telemetry:

@@ -18,7 +18,6 @@ from simulator.anomaly_injector import AnomalyInjector
 from simulator.press_config import PressConfig
 from simulator.press_state_machine import CycleEvent, PressStateMachine
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 logger = logging.getLogger("OPCUAServer")
 
 class PressOpcUaServer:
@@ -116,4 +115,5 @@ async def main():
         server.stop()
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
     asyncio.run(main())

@@ -14,7 +14,6 @@ if str(PROJECT_ROOT) not in sys.path:
 from asyncua import Client
 from opcua.opcua_nodes import NAMESPACE_URI
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] Client: %(message)s")
 logger = logging.getLogger("OPCUAClient")
 
 class PressSubscriptionHandler:
@@ -91,4 +90,5 @@ def main():
     asyncio.run(run_client(endpoint=endpoint, max_events=args.events))
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] Client: %(message)s")
     main()

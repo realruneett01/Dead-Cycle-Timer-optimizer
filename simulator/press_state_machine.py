@@ -4,7 +4,7 @@ import random
 import time
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
-from typing import Dict, Generator, List, Optional
+from typing import Dict, Generator, List, Optional, Tuple
 
 from simulator.anomaly_injector import AnomalyEvent, AnomalyInjector, AnomalyType
 from simulator.press_config import PhaseTiming, PressConfig
@@ -40,6 +40,51 @@ class PressStateMachine:
         self.current_cycle_id = 0
         self.simulated_clock_sec = 0.0
 
+    def _compute_phase_duration(
+        self,
+        timing: PhaseTiming,
+        anomaly_info: Tuple[AnomalyType, float]
+    ) -> Tuple[float, bool, AnomalyType, float]:
+        """Calculates actual phase duration incorporating mechanical jitter and anomalies."""
+        jitter = self.rng.gauss(0.0, timing.std_dev_sec)
+        actual_duration = timing.nominal_sec + jitter
+        anomaly_type, injected_delay = anomaly_info
+        has_anomaly = bool(anomaly_type != AnomalyType.NONE and injected_delay > 0.0)
+        if has_anomaly:
+            actual_duration += injected_delay
+
+        actual_duration = max(timing.min_sec * 0.5, actual_duration)
+        return round(actual_duration, 3), has_anomaly, anomaly_type, injected_delay
+
+    def _sample_telemetry(self, timing: PhaseTiming, phase_name: str) -> Tuple[float, float, float]:
+        """Simulates sensor telemetry: pressure (bar), valve spool (%), and ram position (mm)."""
+        pressure = round(timing.end_pressure_bar + self.rng.uniform(-3.0, 3.0), 1)
+        pressure = max(5.0, min(315.0, pressure))
+        valve_spool = round(timing.valve_spool_nominal_pct + self.rng.uniform(-2.0, 2.0), 1)
+        valve_spool = max(0.0, min(100.0, valve_spool))
+
+        if phase_name == "rapid_advance":
+            ram_pos = 200.0
+        elif phase_name == "extrusion":
+            ram_pos = 850.0
+        else:
+            ram_pos = 0.0
+
+        return pressure, valve_spool, ram_pos
+
+    def _log_ground_truth(self, event: CycleEvent, timing: PhaseTiming, anomaly_type: AnomalyType):
+        """Appends ground truth record for an injected anomaly."""
+        gt_event = AnomalyEvent(
+            cycle_id=event.cycle_id,
+            timestamp=event.start_time,
+            phase_name=event.phase_name,
+            anomaly_type=anomaly_type,
+            injected_delay_sec=event.injected_delay_sec,
+            nominal_duration=timing.nominal_sec,
+            actual_duration=event.duration_sec
+        )
+        self.injector.log_anomaly(gt_event)
+
     def run_cycle(
         self,
         cycle_id: Optional[int] = None,
@@ -51,97 +96,44 @@ class PressStateMachine:
         """
         if cycle_id is None:
             self.current_cycle_id += 1
-            cycle_id = self.current_cycle_id
         else:
             self.current_cycle_id = cycle_id
-
-        if wall_clock_start is None:
-            base_time = datetime.now(timezone.utc)
-        else:
-            base_time = wall_clock_start
+        active_id = self.current_cycle_id
+        base_time = wall_clock_start if wall_clock_start is not None else datetime.now(timezone.utc)
 
         phase_names = self.config.canonical_phase_names
-        cycle_anomalies = self.injector.evaluate_cycle_anomalies(cycle_id, phase_names)
-        
+        cycle_anomalies = self.injector.evaluate_cycle_anomalies(active_id, phase_names)
+
         cycle_events: List[CycleEvent] = []
         cycle_elapsed_sec = 0.0
 
-        # Simulate kinematic position progression
-        # container moves 0 -> 400mm -> 0mm
-        # ram moves 0 -> 850mm -> 0mm
         for idx, name in enumerate(phase_names):
             timing: PhaseTiming = self.config.phases[name]
-            
-            # Base Gaussian jitter based on physical mechanical variance
-            jitter = self.rng.gauss(0.0, timing.std_dev_sec)
-            actual_duration = timing.nominal_sec + jitter
-            
-            # Check for anomaly injection
-            anomaly_type, injected_delay = cycle_anomalies.get(name, (AnomalyType.NONE, 0.0))
-            if anomaly_type != AnomalyType.NONE and injected_delay > 0.0:
-                actual_duration += injected_delay
-                has_anomaly = True
-            else:
-                has_anomaly = False
+            anomaly_info = cycle_anomalies.get(name, (AnomalyType.NONE, 0.0))
+            duration, has_anomaly, anom_type, delay = self._compute_phase_duration(timing, anomaly_info)
+            pressure, valve_spool, ram_pos = self._sample_telemetry(timing, name)
 
-            # Strict physical constraints
-            actual_duration = max(timing.min_sec * 0.5, actual_duration)
-            actual_duration = round(actual_duration, 3)
-
-            # Simulated physical sensor readings
-            # Hydraulic cylinder pressure and proportional valve position
-            pressure = round(timing.end_pressure_bar + self.rng.uniform(-3.0, 3.0), 1)
-            pressure = max(5.0, min(315.0, pressure))
-            
-            valve_spool = round(timing.valve_spool_nominal_pct + self.rng.uniform(-2.0, 2.0), 1)
-            valve_spool = max(0.0, min(100.0, valve_spool))
-
-            # Approximate ram position per phase
-            if name == "rapid_advance":
-                ram_pos = 200.0
-            elif name == "extrusion":
-                ram_pos = 850.0
-            else:
-                ram_pos = 0.0
-
-            # Calculate start timestamp string
-            phase_start_dt = datetime.fromtimestamp(
-                base_time.timestamp() + cycle_elapsed_sec,
-                tz=timezone.utc
-            )
-            timestamp_str = phase_start_dt.isoformat()
-
+            phase_dt = datetime.fromtimestamp(base_time.timestamp() + cycle_elapsed_sec, tz=timezone.utc)
             event = CycleEvent(
-                cycle_id=cycle_id,
+                cycle_id=active_id,
                 phase_name=name,
                 phase_index=idx,
-                start_time=timestamp_str,
-                duration_sec=actual_duration,
+                start_time=phase_dt.isoformat(),
+                duration_sec=duration,
                 nominal_duration_sec=timing.nominal_sec,
                 is_dead_cycle=timing.is_dead_cycle,
                 pressure_bar=pressure,
                 valve_spool_pct=valve_spool,
                 ram_position_mm=ram_pos,
                 has_anomaly=has_anomaly,
-                anomaly_type=anomaly_type.value if hasattr(anomaly_type, "value") else str(anomaly_type),
-                injected_delay_sec=injected_delay
+                anomaly_type=anom_type.value if hasattr(anom_type, "value") else str(anom_type),
+                injected_delay_sec=delay
             )
             cycle_events.append(event)
-
-            # Log to ground truth if an anomaly was injected
             if has_anomaly:
-                gt_event = AnomalyEvent(
-                    cycle_id=cycle_id,
-                    timestamp=timestamp_str,
-                    phase_name=name,
-                    anomaly_type=anomaly_type,
-                    injected_delay_sec=injected_delay,
-                    nominal_duration=timing.nominal_sec,
-                    actual_duration=actual_duration
-                )
-                self.injector.log_anomaly(gt_event)
+                self._log_ground_truth(event, timing, anom_type)
 
-            cycle_elapsed_sec += actual_duration
+            cycle_elapsed_sec += duration
 
         self.simulated_clock_sec += cycle_elapsed_sec
         return cycle_events

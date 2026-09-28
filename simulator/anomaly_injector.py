@@ -64,6 +64,70 @@ class AnomalyInjector:
                     "actual_duration"
                 ])
 
+    def _evaluate_active_wear(self, cycle_id: int) -> Optional[Tuple[str, Tuple[AnomalyType, float]]]:
+        """Calculates delay if a creeping wear progression is active, or clears it when finished."""
+        if self.active_wear_drift is None:
+            return None
+
+        phase = self.active_wear_drift["phase"]
+        step = cycle_id - self.active_wear_drift["start_cycle"]
+        total_steps = self.active_wear_drift["total_cycles"]
+
+        if not (0 <= step < total_steps):
+            self.active_wear_drift = None
+            return None
+
+        base_pct = self.active_wear_drift["base_pct"]
+        rate = self.active_wear_drift["rate_per_cycle"]
+        cumulative_pct = base_pct + (step * rate)
+        nominal = self.active_wear_drift["nominal_sec"]
+        delay = round(nominal * cumulative_pct, 3)
+        return phase, (AnomalyType.CREEPING_WEAR, delay)
+
+    def _create_creeping_wear(self, cycle_id: int) -> Optional[Tuple[str, Tuple[AnomalyType, float]]]:
+        """Initializes a new creeping wear progression."""
+        if self.active_wear_drift is not None:
+            return None
+        target_phase = self.rng.choice(["decompression", "container_shift_close"])
+        total_cycles = self.rng.randint(25, 40)
+        base_pct = 0.20
+        rate = (0.38 - 0.20) / total_cycles
+        nominal_sec = 2.2 if target_phase == "decompression" else 2.8
+        self.active_wear_drift = {
+            "phase": target_phase,
+            "start_cycle": cycle_id,
+            "total_cycles": total_cycles,
+            "base_pct": base_pct,
+            "rate_per_cycle": rate,
+            "nominal_sec": nominal_sec
+        }
+        delay = round(nominal_sec * base_pct, 3)
+        return target_phase, (AnomalyType.CREEPING_WEAR, delay)
+
+    def _sample_new_anomaly(self, cycle_id: int) -> Optional[Tuple[str, Tuple[AnomalyType, float]]]:
+        """Stochastically samples and generates a new anomaly event."""
+        roll = self.rng.random()
+        if roll >= self.anomaly_probability:
+            return None
+
+        choice = self.rng.choices(
+            [AnomalyType.VALVE_OVERLAP, AnomalyType.MICRO_STALL, AnomalyType.CREEPING_WEAR],
+            weights=[0.45, 0.40, 0.15],
+            k=1
+        )[0]
+
+        if choice == AnomalyType.VALVE_OVERLAP:
+            target_phase = self.rng.choice(["container_shift_open", "shear_stroke", "container_shift_close"])
+            delay = round(self.rng.uniform(0.35, 0.70), 3)
+            return target_phase, (AnomalyType.VALVE_OVERLAP, delay)
+
+        if choice == AnomalyType.MICRO_STALL:
+            target_phase = self.rng.choice(["billet_load", "shear_stroke"])
+            delay = round(self.rng.uniform(0.50, 1.25), 3)
+            return target_phase, (AnomalyType.MICRO_STALL, delay)
+
+        return self._create_creeping_wear(cycle_id)
+
     def evaluate_cycle_anomalies(
         self,
         cycle_id: int,
@@ -75,62 +139,13 @@ class AnomalyInjector:
         """
         results: Dict[str, Tuple[AnomalyType, float]] = {}
 
-        # 1. Check for continuing creeping wear
-        if self.active_wear_drift is not None:
-            phase = self.active_wear_drift["phase"]
-            step = cycle_id - self.active_wear_drift["start_cycle"]
-            total_steps = self.active_wear_drift["total_cycles"]
-            
-            if 0 <= step < total_steps:
-                # 20% to 40% slowdown progression across wear cycle
-                base_pct = self.active_wear_drift["base_pct"]
-                rate = self.active_wear_drift["rate_per_cycle"]
-                cumulative_pct = base_pct + (step * rate)
-                nominal = self.active_wear_drift["nominal_sec"]
-                delay = round(nominal * cumulative_pct, 3)
-                results[phase] = (AnomalyType.CREEPING_WEAR, delay)
-            else:
-                self.active_wear_drift = None  # Wear cycle ended (e.g. maintenance seal replacement)
+        wear_event = self._evaluate_active_wear(cycle_id)
+        if wear_event is not None:
+            results[wear_event[0]] = wear_event[1]
 
-        # 2. Decide if a new anomaly triggers on this cycle
-        roll = self.rng.random()
-        if roll < self.anomaly_probability:
-            # Pick which type: Overlap (45%), Micro-stall (40%), Creeping wear initiation (15%)
-            choice = self.rng.choices(
-                [AnomalyType.VALVE_OVERLAP, AnomalyType.MICRO_STALL, AnomalyType.CREEPING_WEAR],
-                weights=[0.45, 0.40, 0.15],
-                k=1
-            )[0]
-
-            if choice == AnomalyType.VALVE_OVERLAP:
-                # Interlock delay on container_shift_open, shear_stroke, or container_shift_close
-                target_phase = self.rng.choice(["container_shift_open", "shear_stroke", "container_shift_close"])
-                delay = round(self.rng.uniform(0.35, 0.70), 3)
-                results[target_phase] = (AnomalyType.VALVE_OVERLAP, delay)
-
-            elif choice == AnomalyType.MICRO_STALL:
-                # Micro-stall / stick-slip in billet_load or shear_stroke
-                target_phase = self.rng.choice(["billet_load", "shear_stroke"])
-                delay = round(self.rng.uniform(0.50, 1.25), 3)
-                results[target_phase] = (AnomalyType.MICRO_STALL, delay)
-
-            elif choice == AnomalyType.CREEPING_WEAR and self.active_wear_drift is None:
-                # Start a creeping wear sequence: 20% to 40% slower over N=25..40 cycles
-                target_phase = self.rng.choice(["decompression", "container_shift_close"])
-                total_cycles = self.rng.randint(25, 40)
-                base_pct = 0.20  # initial 20% slowdown
-                rate = (0.38 - 0.20) / total_cycles  # ramp up to 38%
-                nominal_sec = 2.2 if target_phase == "decompression" else 2.8
-                self.active_wear_drift = {
-                    "phase": target_phase,
-                    "start_cycle": cycle_id,
-                    "total_cycles": total_cycles,
-                    "base_pct": base_pct,
-                    "rate_per_cycle": rate,
-                    "nominal_sec": nominal_sec
-                }
-                delay = round(nominal_sec * base_pct, 3)
-                results[target_phase] = (AnomalyType.CREEPING_WEAR, delay)
+        new_event = self._sample_new_anomaly(cycle_id)
+        if new_event is not None:
+            results[new_event[0]] = new_event[1]
 
         return results
 
