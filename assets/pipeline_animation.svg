@@ -1,0 +1,98 @@
+﻿<svg width="900" height="200" viewBox="0 0 900 200" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <style>
+      @keyframes flow1 { 0%{opacity:0;transform:translateX(0)} 10%{opacity:1} 90%{opacity:1} 100%{opacity:0;transform:translateX(170px)} }
+      @keyframes flow2 { 0%{opacity:0;transform:translateX(0)} 10%{opacity:1} 90%{opacity:1} 100%{opacity:0;transform:translateX(170px)} }
+      @keyframes flow3 { 0%{opacity:0;transform:translateX(0)} 10%{opacity:1} 90%{opacity:1} 100%{opacity:0;transform:translateX(170px)} }
+      @keyframes dash  { to { stroke-dashoffset: -16; } }
+      @keyframes fadeIn { from{opacity:0;} to{opacity:1;} }
+      .p1{animation:flow1 1.8s ease-in-out infinite;}
+      .p2{animation:flow2 1.8s ease-in-out .6s infinite;}
+      .p3{animation:flow3 1.8s ease-in-out 1.2s infinite;}
+      .d1{animation:dash .6s linear infinite;}
+      .d2{animation:dash .6s linear .2s infinite;}
+      .d3{animation:dash .6s linear .4s infinite;}
+      .fa{animation:fadeIn .7s ease-out both;}
+      .fa1{animation-delay:.2s;} .fa2{animation-delay:.5s;}
+      .fa3{animation-delay:.8s;} .fa4{animation-delay:1.1s;}
+    </style>
+    <linearGradient id="bg2" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#0D1117"/><stop offset="100%" stop-color="#0B1120"/></linearGradient>
+    <linearGradient id="rb2" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#1D4ED8"/><stop offset="33%" stop-color="#7C3AED"/><stop offset="66%" stop-color="#059669"/><stop offset="100%" stop-color="#D97706"/></linearGradient>
+    <filter id="gf"><feGaussianBlur stdDeviation="4" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+  </defs>
+  <rect width="900" height="200" fill="url(#bg2)" rx="10"/>
+  <rect x="0" y="0" height="3" fill="url(#rb2)" rx="2" width="0"><animate attributeName="width" from="0" to="900" dur=".6s" fill="freeze"/></rect>
+  <rect x="1" y="1" width="898" height="198" rx="9" fill="none" stroke="#1E293B" stroke-width="1"/>
+  <!-- Stage labels top -->
+  <g font-family="monospace" font-size="9.5" fill="#64748B" text-anchor="middle">
+    <text x="100" y="28" class="fa fa1">01 / SIMULATOR</text>
+    <text x="320" y="28" class="fa fa2">02 / OPC-UA BRIDGE</text>
+    <text x="545" y="28" class="fa fa3">03 / DETECTION ENGINE</text>
+    <text x="780" y="28" class="fa fa4">04 / DASHBOARD</text>
+  </g>
+
+  <!-- Stage 1: Simulator -->
+  <g class="fa fa1">
+    <rect x="22" y="42" width="156" height="110" rx="9" fill="#0F172A" stroke="#1D4ED8" stroke-width="1.5"/>
+    <rect x="22" y="42" width="156" height="5" rx="3" fill="#1D4ED8"/>
+    <text x="100" y="70" text-anchor="middle" font-size="20">&#x1F3ED;</text>
+    <text x="100" y="94" text-anchor="middle" font-family="sans-serif" font-size="12" font-weight="bold" fill="#93C5FD">Press Simulation</text>
+    <text x="100" y="110" text-anchor="middle" font-family="monospace" font-size="8.5" fill="#475569">8-Phase State Machine</text>
+    <text x="100" y="123" text-anchor="middle" font-family="monospace" font-size="8.5" fill="#475569">Fault Injector &#x00B7; Ground Truth</text>
+    <text x="100" y="136" text-anchor="middle" font-family="monospace" font-size="8.5" fill="#475569">Stalls / Overlaps / Wear</text>
+  </g>
+
+  <!-- Arrow 1 + particle -->
+  <line x1="178" y1="97" x2="225" y2="97" stroke="#1D4ED8" stroke-width="1.5" stroke-dasharray="4 4" class="d1"/>
+  <polygon points="225,92 235,97 225,102" fill="#1D4ED8"/>
+  <circle r="3.5" cx="178" cy="97" fill="#60A5FA" class="p1" filter="url(#gf)"/>
+
+  <!-- Stage 2: OPC-UA -->
+  <g class="fa fa2">
+    <rect x="237" y="42" width="166" height="110" rx="9" fill="#0F172A" stroke="#059669" stroke-width="1.5"/>
+    <rect x="237" y="42" width="166" height="5" rx="3" fill="#059669"/>
+    <text x="320" y="70" text-anchor="middle" font-size="20">&#x1F4E1;</text>
+    <text x="320" y="94" text-anchor="middle" font-family="sans-serif" font-size="12" font-weight="bold" fill="#6EE7B7">OPC-UA Bridge</text>
+    <text x="320" y="110" text-anchor="middle" font-family="monospace" font-size="8.5" fill="#475569">IEC 62541 asyncua</text>
+    <text x="320" y="123" text-anchor="middle" font-family="monospace" font-size="8.5" fill="#475569">ISA-95 Node Hierarchy</text>
+    <text x="320" y="136" text-anchor="middle" font-family="monospace" font-size="8.5" fill="#475569">Pressure &#x00B7; Valve &#x00B7; Phase Tags</text>
+  </g>
+
+  <!-- Arrow 2 + particle -->
+  <line x1="403" y1="97" x2="452" y2="97" stroke="#059669" stroke-width="1.5" stroke-dasharray="4 4" class="d2"/>
+  <polygon points="452,92 462,97 452,102" fill="#059669"/>
+  <circle r="3.5" cx="403" cy="97" fill="#34D399" class="p2" filter="url(#gf)"/>
+
+  <!-- Stage 3: Detection -->
+  <g class="fa fa3">
+    <rect x="464" y="42" width="166" height="110" rx="9" fill="#0F172A" stroke="#D97706" stroke-width="1.5"/>
+    <rect x="464" y="42" width="166" height="5" rx="3" fill="#D97706"/>
+    <text x="547" y="70" text-anchor="middle" font-size="20">&#x1F9E0;</text>
+    <text x="547" y="94" text-anchor="middle" font-family="sans-serif" font-size="12" font-weight="bold" fill="#FCD34D">Detection Engine</text>
+    <text x="547" y="110" text-anchor="middle" font-family="monospace" font-size="8.5" fill="#475569">Page&#x2019;s CUSUM (SPRT)</text>
+    <text x="547" y="123" text-anchor="middle" font-family="monospace" font-size="8.5" fill="#475569">Pelt Changepoint &#x00B7; HMM</text>
+    <text x="547" y="136" text-anchor="middle" font-family="monospace" font-size="8.5" fill="#475569">Rolling MAD Baseline</text>
+  </g>
+
+  <!-- Arrow 3 + particle -->
+  <line x1="630" y1="97" x2="678" y2="97" stroke="#D97706" stroke-width="1.5" stroke-dasharray="4 4" class="d3"/>
+  <polygon points="678,92 688,97 678,102" fill="#D97706"/>
+  <circle r="3.5" cx="630" cy="97" fill="#FCD34D" class="p3" filter="url(#gf)"/>
+
+  <!-- Stage 4: Dashboard -->
+  <g class="fa fa4">
+    <rect x="690" y="42" width="188" height="110" rx="9" fill="#0F172A" stroke="#7C3AED" stroke-width="1.5"/>
+    <rect x="690" y="42" width="188" height="5" rx="3" fill="#7C3AED"/>
+    <text x="784" y="70" text-anchor="middle" font-size="20">&#x1F4CA;</text>
+    <text x="784" y="94" text-anchor="middle" font-family="sans-serif" font-size="12" font-weight="bold" fill="#C4B5FD">Dashboard</text>
+    <text x="784" y="110" text-anchor="middle" font-family="monospace" font-size="8.5" fill="#475569">Streamlit &#x00B7; Plotly</text>
+    <text x="784" y="123" text-anchor="middle" font-family="monospace" font-size="8.5" fill="#475569">Phase Waterfall &#x00B7; Diagnostics</text>
+    <text x="784" y="136" text-anchor="middle" font-family="monospace" font-size="8.5" fill="#475569">OEE &#x00B7; Financial ROI Model</text>
+  </g>
+
+  <!-- Bottom latency bar -->
+  <g font-family="monospace" font-size="8.5" fill="#374151" text-anchor="middle">
+    <text x="450" y="180">CUSUM evaluation: 1.78 &#x00B5;s/event &#x00B7; Full pipeline: 0.36 ms/event &#x00B7; Memory: ~65 MB RSS &#x00B7; Edge-native, zero cloud dependency</text>
+  </g>
+  <rect x="0" y="197" height="3" fill="url(#rb2)" rx="2" width="0"><animate attributeName="width" from="0" to="900" dur=".6s" fill="freeze" begin="1.5s"/></rect>
+</svg>
