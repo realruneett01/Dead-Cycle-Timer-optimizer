@@ -1,4 +1,5 @@
 """Dead-Cycle Time Optimizer (DCTO) - Executive & Engineering Dashboard."""
+import os
 import sys
 from pathlib import Path
 
@@ -133,7 +134,7 @@ config = PressConfig()
 @st.cache_data
 def generate_or_load_data(source_mode: str, z_thresh: float):
     """Generates simulated cycle stream or loads existing telemetry from CSV."""
-    telem_file = PROJECT_ROOT / "data" / "telemetry_stream.csv"
+    telem_file = Path(os.environ.get("DCTO_DATA_DIR", PROJECT_ROOT / "data")) / "telemetry_stream.csv"
     if source_mode == "Load CSV Stream" and telem_file.exists():
         df = pd.read_csv(telem_file)
         return df

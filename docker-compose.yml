@@ -1,0 +1,17 @@
+services:
+  dcto:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "8501:8501"          # dashboard (only served when the auto-selected profile enables it)
+    volumes:
+      - dcto-data:/data
+      - ./config:/app/config:ro   # optional: config/dcto.json, config/press_profile.json
+    environment:
+      # Point at the real PLC/gateway; leave empty to run the built-in simulator.
+      DCTO_ENDPOINT: ${DCTO_ENDPOINT:-}
+      DCTO_PRESS_PROFILE: ${DCTO_PRESS_PROFILE:-}
+    # deploy.resources.limits drive the edge/standard/server profile selection:
+    # mem_limit: 1g  ->  edge (headless)
+volumes:
+  dcto-data:

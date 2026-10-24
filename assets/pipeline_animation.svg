@@ -92,7 +92,7 @@
 
   <!-- Bottom latency bar -->
   <g font-family="monospace" font-size="8.5" fill="#374151" text-anchor="middle">
-    <text x="450" y="180">CUSUM evaluation: 1.78 &#x00B5;s/event &#x00B7; Full pipeline: 0.36 ms/event &#x00B7; Memory: ~65 MB RSS &#x00B7; Edge-native, zero cloud dependency</text>
+    <text x="450" y="180">Detector compute: ~1 ms/event (server CPU) &#x00B7; Runs locally, no cloud dependency &#x00B7; Validated on simulated data</text>
   </g>
   <rect x="0" y="197" height="3" fill="url(#rb2)" rx="2" width="0"><animate attributeName="width" from="0" to="900" dur=".6s" fill="freeze" begin="1.5s"/></rect>
 </svg>

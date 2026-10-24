@@ -1,0 +1,16 @@
+[Unit]
+Description=Dead-Cycle Time Optimizer
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=@INSTALL_DIR@
+ExecStart=@INSTALL_DIR@/.venv/bin/python -m deploy run
+Restart=always
+RestartSec=5
+NoNewPrivileges=true
+ProtectSystem=full
+
+[Install]
+WantedBy=multi-user.target

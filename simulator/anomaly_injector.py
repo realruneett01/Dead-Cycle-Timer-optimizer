@@ -1,5 +1,6 @@
 """Deterministic industrial anomaly injection engine for Extrusion Press simulation."""
 import csv
+import os
 import random
 from dataclasses import dataclass
 from enum import Enum
@@ -41,7 +42,7 @@ class AnomalyInjector:
 
         # Ground truth file path
         if ground_truth_path is None:
-            base_dir = Path(__file__).resolve().parent.parent / "data"
+            base_dir = Path(os.environ.get("DCTO_DATA_DIR", Path(__file__).resolve().parent.parent / "data"))
             base_dir.mkdir(parents=True, exist_ok=True)
             self.ground_truth_path = base_dir / "ground_truth.csv"
         else:

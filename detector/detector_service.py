@@ -2,6 +2,7 @@
 import csv
 import json
 import logging
+import os
 from dataclasses import dataclass
 from collections import deque
 from pathlib import Path
@@ -119,7 +120,7 @@ class DetectorService:
 
         # Telemetry output path
         if cfg.telemetry_log_path is None:
-            base_data = Path(__file__).resolve().parent.parent / "data"
+            base_data = Path(os.environ.get("DCTO_DATA_DIR", Path(__file__).resolve().parent.parent / "data"))
             self.telemetry_log_path = base_data / "telemetry_stream.csv"
         else:
             self.telemetry_log_path = Path(cfg.telemetry_log_path)
