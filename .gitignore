@@ -45,3 +45,6 @@ lefthook.yml
 
 
 
+
+# Per-machine generated deployment config
+config/

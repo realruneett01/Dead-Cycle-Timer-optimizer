@@ -298,7 +298,7 @@ pip install -r requirements.txt
 
 ```powershell
 pytest -v
-# Expected: 18 passed in ~68 s
+# Expected: 26 passed
 ```
 
 ### 3. Run the 600-Cycle Benchmark
@@ -324,6 +324,29 @@ python -m opcua.test_client --events 30
 streamlit run dashboard/dashboard_app.py
 # Open http://localhost:8501
 ```
+
+---
+
+## 🛰️ Zero-Touch Deployment
+
+The installer detects the machine and configures itself: CPU/RAM (cgroup-aware), architecture,
+free ports, Python compatibility, and installed packages select an `edge` (headless), `standard`,
+or `server` profile. The OPC-UA nodes are located by browse name, so no hard-coded plant paths.
+
+```bash
+./install.sh --endpoint opc.tcp://plc-gateway:4840   # Linux/macOS; add --service for systemd
+.\install.ps1 -Endpoint opc.tcp://plc-gateway:4840    # Windows
+docker compose up -d                                  # any host with Docker (set DCTO_ENDPOINT)
+
+python -m deploy doctor                 # what was detected, and what would block a run
+python -m deploy calibrate healthy.csv  # learn this press's phase timings from a clean-run log
+python -m deploy run                    # simulator (if no endpoint) + detector + dashboard
+```
+
+Settings layer as: host-derived defaults < `config/dcto.json` < `DCTO_*` environment variables
+(e.g. `DCTO_THRESHOLD_Z=3.0`, `DCTO_NODE_NAMES='{"duration":"CycleTime"}'`). Detector state is
+checkpointed to the data directory and restored on restart. Omit `--endpoint` to run against the
+built-in simulator. See [PROPRIETARY_TECH.md](PROPRIETARY_TECH.md) for what is and is not original.
 
 ---
 
