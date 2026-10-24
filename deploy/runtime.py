@@ -18,6 +18,7 @@ LOGICAL_NODES = {
     "duration": "PhaseDuration",
 }
 MAX_BROWSE_DEPTH = 6
+SAMPLING_MS = 20  # must be well below the shortest phase duration
 
 
 async def _find_by_browse_name(root: Node, name: str, depth: int = MAX_BROWSE_DEPTH) -> Optional[Node]:
@@ -50,34 +51,69 @@ async def discover_nodes(client: Client, overrides: Dict[str, str]) -> Dict[str,
     return found
 
 
-class _Handler:
-    """Forwards PhaseDuration changes to the detector with their phase/cycle context."""
+class TelemetryTap:
+    """Subscribes to phase/cycle/duration and emits (cycle, phase, duration) snapshots.
 
-    def __init__(self, service: DetectorService, nodes: Dict[str, Node], settings: Settings):
-        self.service = service
-        self.nodes = nodes
-        self.settings = settings
+    Phase and cycle are taken from the subscription stream, not re-read on each duration
+    update: a fresh read can race the publisher and attribute a duration to the wrong phase.
+    """
+
+    def __init__(self, nodes: Dict[str, Node]):
+        self._ids = {nodes[k].nodeid: k for k in LOGICAL_NODES}
+        self._nodes = nodes
+        self._latest: Dict[str, object] = {}
+        self._phase_updates = 0
+        self.dropped = 0
         self.queue: asyncio.Queue = asyncio.Queue()
-        self.processed = 0
 
     def datachange_notification(self, node, val, data):
         # pylint: disable=unused-argument
-        """asyncua callback; only the duration node is subscribed."""
-        self.queue.put_nowait(float(val))
+        """asyncua callback; duration updates complete a snapshot."""
+        key = self._ids.get(node.nodeid)
+        if key is None:
+            return
+        self._latest[key] = val
+        if key == "phase":
+            self._phase_updates += 1
+        if key == "duration" and "phase" in self._latest and "cycle" in self._latest:
+            # More than one phase change since the last duration means updates were skipped, so
+            # the pairing is unreliable: drop it rather than mislabel it.
+            if self._phase_updates > 1:
+                self.dropped += 1
+            else:
+                self.queue.put_nowait(
+                    (int(self._latest["cycle"]), str(self._latest["phase"]), float(val)))
+            self._phase_updates = 0
+
+    async def start(self, client: Client):
+        """Creates the subscription; returns it so the caller can delete it."""
+        sub = await client.create_subscription(SAMPLING_MS, self)
+        # Initial values arrive for phase/cycle first, then duration, in this order.
+        await sub.subscribe_data_change([self._nodes["phase"], self._nodes["cycle"], self._nodes["duration"]])
+        return sub
+
+
+class _Ingest:
+    """Feeds tap snapshots to the detector."""
+
+    def __init__(self, service: DetectorService, tap: TelemetryTap, settings: Settings):
+        self.service = service
+        self.tap = tap
+        self.settings = settings
+        self.processed = 0
 
     async def drain(self, stop: asyncio.Event):
-        """Processes queued durations until stop is set."""
+        """Processes queued snapshots until stop is set."""
         while not stop.is_set():
             try:
-                duration = await asyncio.wait_for(self.queue.get(), timeout=0.5)
+                cycle, phase, duration = await asyncio.wait_for(self.tap.queue.get(), timeout=0.5)
             except asyncio.TimeoutError:
                 continue
-            phase = await self.nodes["phase"].read_value()
-            cycle = await self.nodes["cycle"].read_value()
-            record = self.service.process_phase_event(
-                PhaseEventObservation(int(cycle), str(phase), duration)
-            )
+            record = self.service.process_phase_event(PhaseEventObservation(cycle, phase, duration))
             self.processed += 1
+            if self.tap.dropped and self.processed % 100 == 0:
+                logger.warning("%d telemetry updates skipped (source faster than %d ms sampling)",
+                               self.tap.dropped, SAMPLING_MS)
             if record["is_anomaly"]:
                 logger.warning(
                     "ANOMALY cycle=%s phase=%s type=%s excess=%.2fs",
@@ -108,11 +144,10 @@ async def _session(settings: Settings, endpoint: str, service: DetectorService, 
         except (ValueError, ua.UaError):
             logger.info("Namespace %s absent; relying on browse-name discovery", NAMESPACE_URI)
         nodes = await discover_nodes(client, settings.node_names)
-        handler = _Handler(service, nodes, settings)
-        sub = await client.create_subscription(50, handler)
-        await sub.subscribe_data_change([nodes["duration"]])
+        tap = TelemetryTap(nodes)
+        sub = await tap.start(client)
         logger.info("Streaming %s -> detector (profile=%s)", endpoint, settings.profile)
-        await handler.drain(stop)
+        await _Ingest(service, tap, settings).drain(stop)
         await sub.delete()
 
 

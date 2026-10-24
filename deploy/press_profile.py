@@ -16,6 +16,7 @@ MIN_CALIBRATION_SAMPLES = 30
 DURATION_COLUMNS = ("actual_duration", "duration", "duration_sec")
 PHASE_BOUND_SIGMAS = 6.0
 MAD_TO_SIGMA = 1.4826
+UNKNOWN_PRODUCTIVE_SEC = 20.0  # README: dead-cycle phases are 14-22 s in total, strokes 45 s+
 
 
 def load_press_config(path: Optional[str]) -> PressConfig:
@@ -65,16 +66,27 @@ def _read_durations(csv_path: Path) -> Dict[str, List[float]]:
 
 
 def calibrate_from_csv(csv_path: str, base: Optional[PressConfig] = None) -> Dict:
-    """Learns per-phase nominal/sigma/bounds from a healthy-operation log.
+    """Learns per-phase nominal/sigma/bounds from a healthy-operation log (known phases only)."""
+    return profile_from_samples(_read_durations(Path(csv_path)), base)
 
-    Median and MAD are used so a handful of faults in the log do not skew the baseline.
-    Returns a profile dict suitable for json.dump and load_press_config.
+
+def profile_from_samples(
+    samples: Dict[str, List[float]],
+    base: Optional[PressConfig] = None,
+    learn_unknown: bool = False,
+) -> Dict:
+    """Builds a profile dict from per-phase durations.
+
+    Median and MAD are used so a handful of faults in the data do not skew the baseline.
+    With learn_unknown, phases the default press model lacks are added in full; whether they
+    count as dead-cycle is a heuristic (nominal < UNKNOWN_PRODUCTIVE_SEC) and is flagged in
+    their description so a human can confirm it.
     """
     base = base or PressConfig()
-    samples = _read_durations(Path(csv_path))
     phases: Dict[str, Dict] = {}
     for name, values in samples.items():
-        if name not in base.phases:
+        known = name in base.phases
+        if not known and not learn_unknown:
             logger.warning("Ignoring unknown phase '%s' (%d samples)", name, len(values))
             continue
         if len(values) < MIN_CALIBRATION_SAMPLES:
@@ -83,12 +95,18 @@ def calibrate_from_csv(csv_path: str, base: Optional[PressConfig] = None) -> Dic
             continue
         arr = np.array(values)
         median = float(np.median(arr))
-        sigma = float(MAD_TO_SIGMA * np.median(np.abs(arr - median)))
-        sigma = max(sigma, 0.01)
-        phases[name] = {
+        sigma = max(float(MAD_TO_SIGMA * np.median(np.abs(arr - median))), 0.01)
+        spec = {
             "nominal_sec": round(median, 3),
             "std_dev_sec": round(sigma, 3),
             "min_sec": round(max(0.1, median - PHASE_BOUND_SIGMAS * sigma), 3),
             "max_sec": round(median + PHASE_BOUND_SIGMAS * sigma * 2, 3),
         }
+        if not known:
+            spec.update(
+                is_dead_cycle=median < UNKNOWN_PRODUCTIVE_SEC,
+                start_pressure_bar=0.0, end_pressure_bar=0.0, valve_spool_nominal_pct=0.0,
+                description="Auto-discovered; dead-cycle flag is a duration heuristic - confirm",
+            )
+        phases[name] = spec
     return {"press_id": base.press_id, "phases": phases}

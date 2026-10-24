@@ -28,7 +28,8 @@ Anyone can reimplement each of these from the literature.
 | 6 | **Fault taxonomy and magnitudes** (valve overlap +0.35–0.70 s, micro-stall +0.50–1.25 s, creeping wear +20–38 % over 25–40 cycles) with leakage-free ground truth | `simulator/anomaly_injector.py` | Defines the benchmark every claim rests on |
 | 7 | **Operator-feedback loop + regime adaptation** (`record_operator_feedback`, `adapt_to_new_regime`, `rebaseline_phase`, JSON checkpointing) | `detector_service.py`, `rolling_baseline.py` | Makes the detector deployable on a live plant without retraining |
 | 8 | **Dead-cycle → € / OEE / aluminium-tonnage model** | `dashboard/oee_calculator.py` | Commercial value argument |
-| 9 | **Zero-touch deployment layer**: host probing, hardware profile selection, plant-agnostic OPC-UA node discovery, calibration from a healthy-run log | `deploy/` | New in this change |
+| 9 | **Zero-touch deployment and commissioning**: host probing, hardware profiles, plant-agnostic OPC-UA node discovery, sensor-health checks (frozen, noisy, skipped-update, stuck-counter), live calibration with a 70/30 hold-out validation, and a gate that blocks `run` on an unverified plant | `deploy/`, `launch.py` | New; the hold-out gate and skipped-update detection are the distinctive parts |
+| 10 | **Pendrive distribution**: offline wheelhouse, per-host environment outside the stick, calibration that travels with the drive and is re-verified (not redone) on each new machine | `launch.py`, `dcto.sh`, `dcto.bat`, `deploy bundle` | Operational know-how rather than novel science |
 
 ## Honest caveats
 

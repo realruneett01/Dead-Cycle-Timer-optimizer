@@ -1,8 +1,9 @@
-"""`python -m deploy` entry point: doctor | configure | calibrate | run | health."""
+"""`python -m deploy` entry point: doctor | configure | calibrate | commission | bundle | run | health."""
 import argparse
 import asyncio
 import json
 import logging
+import platform
 import signal
 import subprocess
 import sys
@@ -66,6 +67,33 @@ def cmd_calibrate(args) -> int:
     return 0
 
 
+def cmd_commission(args) -> int:
+    """Preflight + sensor discovery + live calibration + validation; optionally start running."""
+    from deploy.commission import CommissionOptions, commission  # pylint: disable=import-outside-toplevel
+
+    code = asyncio.run(commission(CommissionOptions(
+        endpoint=args.endpoint or "", scan_subnet=args.scan, demo=args.demo,
+        cycles=args.cycles, timeout_sec=args.timeout, verify=args.verify)))
+    if code == 0 and args.run and not args.demo:
+        return cmd_run(argparse.Namespace(endpoint=None, no_dashboard=args.no_dashboard,
+                                          skip_commissioning=False))
+    return code
+
+
+def cmd_bundle(args) -> int:
+    """Downloads wheels for this OS/Python into vendor/wheels so the stick installs offline."""
+    dest = PROJECT_ROOT / "vendor" / "wheels"
+    dest.mkdir(parents=True, exist_ok=True)
+    cmd = [sys.executable, "-m", "pip", "download", "-r", str(PROJECT_ROOT / "requirements.txt"),
+           "-d", str(dest)]
+    code = subprocess.call(cmd)
+    if code == 0:
+        tag = f"{platform.system()}-{platform.machine()}-py{sys.version_info.major}{sys.version_info.minor}"
+        (dest / "BUNDLE_TARGET.txt").write_text(tag + "\n", encoding="utf-8")
+        print(f"Wheelhouse built for {tag}. It only works on machines with the same OS, CPU and Python.")
+    return code
+
+
 def cmd_health(args) -> int:
     """Exit 0 when the detector wrote telemetry recently (container/systemd health probe)."""
     import time  # pylint: disable=import-outside-toplevel
@@ -125,6 +153,12 @@ def cmd_run(args) -> int:
     settings = load_settings()
     if args.endpoint:
         settings.endpoint = args.endpoint
+    if not settings.use_simulator and not args.skip_commissioning:
+        from deploy.commission import is_commissioned  # pylint: disable=import-outside-toplevel
+        if not is_commissioned(settings):
+            print("This plant endpoint has not passed commissioning. Run: python -m deploy commission\n"
+                  "(or --skip-commissioning to override at your own risk)", file=sys.stderr)
+            return 2
     if args.no_dashboard:
         settings.dashboard = False
     Path(settings.data_dir).mkdir(parents=True, exist_ok=True)
@@ -151,9 +185,24 @@ def main(argv: Optional[List[str]] = None) -> int:
     p = sub.add_parser("run", help="start the full stack for this host")
     p.add_argument("--endpoint")
     p.add_argument("--no-dashboard", action="store_true")
+    p.add_argument("--skip-commissioning", action="store_true")
     p.set_defaults(fn=cmd_run)
+    p = sub.add_parser("commission", help="check, discover sensors, calibrate and validate before go-live")
+    p.add_argument("--endpoint")
+    p.add_argument("--scan", action="store_true", help="also scan the local /24 for OPC-UA servers")
+    p.add_argument("--demo", action="store_true", help="rehearse against the built-in simulator")
+    p.add_argument("--cycles", type=int, default=30, help="cycles to learn from (minimum 43 so validation has data)")
+    p.add_argument("--timeout", type=float, default=3600.0, help="max seconds to wait for data")
+    p.add_argument("--verify", action="store_true",
+                   help="quick check (5 cycles) against the saved calibration")
+    p.add_argument("--run", action="store_true", help="start running if commissioning passes")
+    p.add_argument("--no-dashboard", action="store_true")
+    p.set_defaults(fn=cmd_commission)
+    p = sub.add_parser("bundle", help="download wheels so this folder installs offline")
+    p.set_defaults(fn=cmd_bundle)
     args = parser.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
+    logging.getLogger("asyncua").setLevel(logging.ERROR)
     return args.fn(args)
 
 

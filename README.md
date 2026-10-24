@@ -8,16 +8,20 @@
 
 [![Python](https://img.shields.io/badge/Python-3.11_%7C_3.12-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
 [![OPC-UA](https://img.shields.io/badge/IEC_62541-OPC--UA-005C8A?style=for-the-badge&logo=industrial-shields&logoColor=white)](https://opcfoundation.org/)
-[![Tests](https://img.shields.io/badge/Pytest-18_Passed-10B981?style=for-the-badge&logo=pytest&logoColor=white)](tests/)
-[![Precision](https://img.shields.io/badge/Precision-95.42%25_(Page_CUSUM)-2563EB?style=for-the-badge)](#-benchmark-validation)
-[![Recall](https://img.shields.io/badge/Recall-98.65%25_(Fused)-059669?style=for-the-badge)](#-benchmark-validation)
-[![F1](https://img.shields.io/badge/F1_Score-0.9685-7C3AED?style=for-the-badge)](#-benchmark-validation)
-[![FPR](https://img.shields.io/badge/FPR-0.33%25-10B981?style=for-the-badge)](#-benchmark-validation)
+[![Tests](https://img.shields.io/badge/Pytest-38_Passed-10B981?style=for-the-badge&logo=pytest&logoColor=white)](tests/)
+[![Precision](https://img.shields.io/badge/Precision_(simulated)-95.42%25-2563EB?style=for-the-badge)](#-benchmark-validation)
+[![Recall](https://img.shields.io/badge/Recall_(simulated)-98.65%25-059669?style=for-the-badge)](#-benchmark-validation)
+[![F1](https://img.shields.io/badge/F1_(simulated)-0.9685-7C3AED?style=for-the-badge)](#-benchmark-validation)
+[![FPR](https://img.shields.io/badge/FPR_(simulated)-0.33%25-10B981?style=for-the-badge)](#-benchmark-validation)
 [![License: MIT](https://img.shields.io/badge/License-MIT-6B7280?style=for-the-badge)](LICENSE)
 
-**Real-time micro-stall detection for 15–50 MN hydraulic aluminum extrusion presses.**
+**Micro-stall detection for hydraulic aluminum extrusion presses (modelled on a 28 MN press).**
 Page's CUSUM sequential test (SPRT-grounded) fused with Ruptures Pelt changepoint detection and a Gaussian HMM —
-all wired to a live OPC-UA telemetry stream and a Streamlit diagnostic dashboard.
+all wired to an OPC-UA telemetry stream and a Streamlit diagnostic dashboard.
+
+> **Status: validated on simulated data only.** Every accuracy figure below comes from the built-in
+> press simulator. DCTO has not yet been run against a physical press, PLC or sensor set. See
+> [Status & Limitations](#-status--limitations).
 
 </div>
 
@@ -31,7 +35,26 @@ all wired to a live OPC-UA telemetry stream and a Streamlit diagnostic dashboard
 
 </div>
 
-Every event travels from physics-calibrated press simulation → IEC 62541 OPC-UA edge bridge → three-tier statistical detection → real-time Streamlit dashboard in a single event loop, with no cloud hop and sub-millisecond per-event latency.
+Every event travels from a simulated press → IEC 62541 OPC-UA edge bridge → three-tier statistical detection → real-time Streamlit dashboard in a single event loop with no cloud dependency. Detector compute is about 1 ms per event on a server-class CPU ([measured](#-measured-detector-latency)); OPC-UA transport and PLC scan time are extra.
+
+---
+
+## 🧭 Status & Limitations
+
+What is demonstrated, and what is not:
+
+| Claim | Status |
+|---|---|
+| Detection pipeline runs end to end (simulator → OPC-UA → detector → dashboard) | ✅ Tested (38 automated tests) |
+| Detection accuracy on simulated faults | ✅ Measured, but **in-sample** (see Benchmark) |
+| Works on a real press, real PLC, or real sensors | ❌ **Not tested** |
+| Financial recovery figures | ⚠️ Model output from assumed inputs, not measured savings |
+| Runs on Windows, ARM, Docker, systemd | ⚠️ Written but only exercised on Linux x86-64 |
+
+**Data contract.** DCTO reads an OPC-UA server that publishes three values: the current phase name,
+a cycle counter, and each phase's duration in seconds. It does not read analog, USB, serial or Modbus
+sensors directly. Physical sensors must reach DCTO through a PLC or gateway that exposes those values
+over OPC-UA. Without that mapping nothing here can talk to your machine.
 
 ---
 
@@ -44,12 +67,12 @@ In heavy aluminum extrusion (15 MN – 50+ MN presses), every billet cycle split
 | **Extrusion Stroke** | 45 – 120 s | ✅ Productive — billet pushed through die |
 | **Dead-Cycle Time (DCT)** | 14 – 22 s | ❌ Non-productive — mechanical repositioning |
 
-Traditional SCADA only flags catastrophic failures. The sub-second stalls that accumulate silently are **invisible** to existing alarm logic:
+Alarm logic is typically built around hard faults and fixed thresholds, so sub-second stalls that accumulate silently are easy to miss:
 
 - **Valve Spool Hesitation:** Proportional directional valves (~ISO VG 46) suffer 200–800 ms sluggishness during cold starts or thermal transients.
 - **Micro-Stalls (Stiction):** Debris or seal wear on container tie rods causes 500–1200 ms momentary halts mid-stroke.
 - **Creeping Wear Drift:** Cylinder seal blow-by inflates phase durations +20%–40% over weeks — undetected until a hard fault.
-- **Compounding Loss:** 1.5 s/cycle × 43 cycles/hr × 7,200 hr/yr = **129 machine hours/year ≡ €122,550 direct cost + 527 MT of lost aluminium output** — per single press.
+- **Compounding Loss:** 1.5 s/cycle × 43 cycles/hr × 7,200 hr/yr = **129 machine hours/year ≡ €122,550 direct cost + 527 MT of lost aluminium output** — per single press. *(Illustrative arithmetic on assumed inputs: €950/h, 43 cycles/h, 7,200 h/yr. Not measured plant data.)*
 
 ```
 ┌─────────────────────────────────┬──────────────────────────────────────────────────────────┐
@@ -103,18 +126,21 @@ flowchart LR
 
 ## 📊 Datasets & Physical Calibration
 
-### 1. Physics-Informed Simulated Press Dataset
+### 1. Simulated Press Dataset
+
+Nominal values are engineering estimates in `simulator/press_config.py`. They are not fitted to
+recordings from a physical press (none are included in this repository).
 
 | # | Phase | Nominal | Jitter (σ) | Actuator | Operating Condition |
 |---|---|---|---|---|---|
 | 0 | `decompression` | **2.20 s** | ±0.08 s | Main cylinder decompression valves | 280 → 15 bar |
 | 1 | `container_shift_open` | **3.00 s** | ±0.12 s | Twin container shift cylinders | 80% proportional valve |
 | 2 | `shear_stroke` | **2.50 s** | ±0.10 s | Vertical hydraulic butt shear | Cutting spike: 185 bar |
-| 3 | `die_slide_check` | **1.80 s** | ±0.06 s | Lateral die cassette indexer | Proportional position control |
-| 4 | `billet_load` | **3.20 s** | ±0.14 s | Overhead pivoting loader arm | Mechanical swing & grip |
+| 3 | `die_slide` | **1.80 s** | ±0.06 s | Lateral die cassette indexer | Proportional position control |
+| 4 | `billet_load` | **3.20 s** | ±0.15 s | Overhead pivoting loader arm | Mechanical swing & grip |
 | 5 | `container_shift_close` | **2.80 s** | ±0.10 s | Twin container shift cylinders | Clamping against die bolster |
-| 6 | `rapid_advance` | **2.50 s** | ±0.10 s | Main ram pre-fill & side cylinders | Pre-fill stroke to billet |
-| 7 | `extrusion_stroke` | **55.00 s** | ±3.50 s | Main cylinder + side cylinders | Full extrusion: 250–315 bar |
+| 6 | `rapid_advance` | **2.50 s** | ±0.08 s | Main ram pre-fill & side cylinders | Pre-fill stroke to billet |
+| 7 | `extrusion` | **65.00 s** | ±2.50 s | Main cylinder + side cylinders | Full extrusion: 250–315 bar |
 
 ### 2. Ground-Truth Fault Injection (`data/ground_truth.csv`)
 
@@ -124,13 +150,19 @@ flowchart LR
 | `MICRO_STALL` | +0.50 s to +1.25 s | Hydraulic contamination, guide-rail stiction | **CUSUM + Tier 1 MAD** |
 | `CREEPING_WEAR` | +20% to +38% drift over 25–40 cycles | Seal blow-by, pilot valve wear | **Tier 2 Pelt Changepoint** |
 
-Every injected anomaly is immutably logged with cycle index, phase, true excess delay, and category — zero data leakage.
+Every injected anomaly is logged with cycle index, phase, true excess delay, and category. The detector never reads this file; it is used only for scoring.
 
 ---
 
 ## 🎯 Benchmark Validation
 
 **600 cycles · 575 post-warmup · 4,600 evaluated events · 297 ground-truth anomalies**
+
+> [!WARNING]
+> **These numbers are optimistic.** The data is synthetic and comes from the same simulator whose fault
+> model the thresholds were tuned against (z = 2.75, δ = 0.35 s, the fusion rule). There is no held-out
+> dataset, one random seed (42) is used, and 84% of the anomalies (249 / 297) are creeping-wear cycles.
+> Treat them as a regression benchmark, not as expected plant performance.
 
 Run it live at any time:
 
@@ -168,7 +200,10 @@ CUSUM cuts false positives by **61%** relative to the MAD baseline alone. Fusing
 > [!NOTE]
 > **Why 3 valve-overlap delays were missed:** In `billet_load` (σ = 0.14 s), a +0.35 s injection coincided with a −0.11 s stochastic draw, leaving +0.24 s effective excess — statistically indistinguishable from normal jitter without lowering the CUSUM threshold and multiplying false alarms.
 
-### Economic Recovery (single 28 MN press)
+### Economic Recovery (single 28 MN press) — model output, not measured
+
+Computed by `dashboard/oee_calculator.py` from assumed inputs (€950/h, 43 cycles/h, 7,200 h/yr, 85% of
+the excess delay eliminated). It is only as good as those assumptions.
 
 | Recovery Item | Value |
 |---|---|
@@ -269,8 +304,15 @@ Dead-Cycle-Timer-optimizer/
 │   ├── test_opcua.py                 # OPC-UA protocol exchange integration tests
 │   ├── test_detector.py              # CUSUM, MAD, HMM & rebaseline unit tests
 │   ├── test_end_to_end.py            # Full pipeline integration tests
-│   └── validate_detector.py          # 600-cycle 3-model benchmark harness
+│   ├── validate_detector.py          # 600-cycle 3-model benchmark harness
+│   ├── measure_latency.py            # Per-event latency and memory on this machine
+│   ├── test_deploy.py                # Host probing, profiles, settings, calibration
+│   └── test_commission.py            # Sensor checks, plant gate, launcher
 │
+├── deploy/                           # Host probing, commissioning, runtime, CLI
+├── launch.py · dcto.sh · dcto.bat    # Pendrive launcher (see Deployment)
+├── Dockerfile · docker-compose.yml · install.sh · install.ps1
+├── PROPRIETARY_TECH.md               # What is and is not original
 ├── requirements.txt                  # Minimum-version Python dependencies
 ├── .gitignore
 ├── LICENSE                           # MIT
@@ -298,7 +340,7 @@ pip install -r requirements.txt
 
 ```powershell
 pytest -v
-# Expected: 26 passed
+# Expected: 38 passed
 ```
 
 ### 3. Run the 600-Cycle Benchmark
@@ -327,40 +369,78 @@ streamlit run dashboard/dashboard_app.py
 
 ---
 
-## 🛰️ Zero-Touch Deployment
+## 🔌 Deployment & Commissioning
 
-The installer detects the machine and configures itself: CPU/RAM (cgroup-aware), architecture,
-free ports, Python compatibility, and installed packages select an `edge` (headless), `standard`,
-or `server` profile. The OPC-UA nodes are located by browse name, so no hard-coded plant paths.
+### Pendrive workflow
+
+1. **Build the stick** on a machine with the same OS, CPU and Python (3.11/3.12) as the target:
+   copy this folder to the drive, then run `python -m deploy bundle` to add an offline wheelhouse
+   (about 190 MB). Wheels are platform-specific, so build one stick per target type.
+2. **Plug it in** and run `sh dcto.sh` (Linux/macOS) or double-click `dcto.bat` (Windows).
+3. DCTO then does the following with no further input:
+
+| Step | What it checks |
+|---|---|
+| Preflight | Python version, packages, drive writable (not write-protected), free space, memory, ports |
+| Find sensors | Your `--endpoint`, otherwise OPC-UA servers on localhost (`--scan` also searches the local /24) |
+| Connect & map | Locates `CurrentPhase` / `CycleNumber` / `PhaseDuration` by browse name (overridable) |
+| Signal health | Data arrives, no NaN or non-positive values, no frozen sensor, cycle counter advances, no skipped updates, phase coverage |
+| Calibrate | Learns each phase's nominal time and spread (median/MAD) from live cycles |
+| Validate | Calibrates on the first 70% of the cycles, replays the detector on the last 30%, and reports the alarm rate |
+| Gate | `run` refuses a plant endpoint that has not passed. On later plug-ins a 5-cycle check against the saved calibration replaces recalibration |
+
+Calibration, config and telemetry live on the stick, so learned state travels with it. The Python
+environment is built in the host's user cache directory (a FAT/exFAT stick cannot hold a venv). The
+host must already have Python 3.11 or 3.12; the stick does not bundle an interpreter.
+
+```bash
+sh dcto.sh --demo                                   # rehearse everything against the built-in simulator
+sh dcto.sh --endpoint opc.tcp://192.168.0.10:4840   # first time on a real plant (full calibration)
+sh dcto.sh                                          # later plug-ins: quick verify, then run
+sh dcto.sh commission --scan                        # look for OPC-UA servers on the local network
+```
+
+A full first commissioning needs at least 43 cycles of data. At roughly 80 s per cycle that is about an
+hour of production, and it should be done while the press is healthy. A failed check prints the fix and
+leaves the plant connection disabled.
+
+**What commissioning cannot tell you.** It verifies that the data is live, sane and self-consistent. It
+cannot confirm that the PLC mapping means what you think it means, or that the press was healthy while
+calibrating. Newly discovered phases get a dead-cycle flag from a duration heuristic (under 20 s) that you
+must confirm in `config/press_profile.json`.
+
+### Other install paths
 
 ```bash
 ./install.sh --endpoint opc.tcp://plc-gateway:4840   # Linux/macOS; add --service for systemd
 .\install.ps1 -Endpoint opc.tcp://plc-gateway:4840    # Windows
-docker compose up -d                                  # any host with Docker (set DCTO_ENDPOINT)
-
-python -m deploy doctor                 # what was detected, and what would block a run
-python -m deploy calibrate healthy.csv  # learn this press's phase timings from a clean-run log
-python -m deploy run                    # simulator (if no endpoint) + detector + dashboard
+docker compose up -d                                  # set DCTO_ENDPOINT; edge profile if memory-limited
+python -m deploy doctor                               # show detected host and effective settings
 ```
 
-Settings layer as: host-derived defaults < `config/dcto.json` < `DCTO_*` environment variables
+Hardware profiles (`edge` / `standard` / `server`) are picked from CPU count, memory (cgroup-aware) and
+architecture. Settings layer as host defaults < `config/dcto.json` < `DCTO_*` environment variables
 (e.g. `DCTO_THRESHOLD_Z=3.0`, `DCTO_NODE_NAMES='{"duration":"CycleTime"}'`). Detector state is
-checkpointed to the data directory and restored on restart. Omit `--endpoint` to run against the
-built-in simulator. See [PROPRIETARY_TECH.md](PROPRIETARY_TECH.md) for what is and is not original.
+checkpointed and restored on restart. See [PROPRIETARY_TECH.md](PROPRIETARY_TECH.md) for what is and is
+not original.
 
 ---
 
-## ⚡ Measured Edge Latency
+## ⚡ Measured Detector Latency
 
-Benchmarked on standard x86 CPU, no hardware acceleration:
+Reproduce with `python tests/measure_latency.py`. Figures below are from three runs on a shared cloud
+VM (Intel Xeon 2.8 GHz, 4 vCPU, Linux, Python 3.12). **Not yet measured on edge hardware.**
 
-| Component | Mean Latency | p99 Latency |
+| Component | Mean | p99 |
 |---|---|---|
-| Page's CUSUM evaluation | **1.78 µs / event** | 3.70 µs |
-| Full multi-tier pipeline | **0.36 ms / event** | 0.72 ms |
-| Memory footprint (continuous) | **~65 MB RSS** | — |
+| Page's CUSUM stage | ~0.015 ms / event | ~0.045 ms |
+| Full multi-tier pipeline (incl. per-row CSV flush) | ~0.8–1.0 ms / event | ~3.6–5.3 ms |
+| Peak process memory (incl. library imports) | ~176 MB | — |
 
-Sub-millisecond response is well inside standard 1–10 ms PLC cycle boundaries. Designed for supervisory edge deployment alongside plant PLCs via IEC 62541 OPC-UA subscriptions.
+The p99 is dominated by periodic HMM refits. This covers detector compute only; OPC-UA transport and PLC
+scan time are additional. Events arrive once per press phase (seconds apart), so this is ample headroom
+for supervisory monitoring, but DCTO is not a hard real-time controller and must not sit in a safety or
+motion-control loop.
 
 ---
 
