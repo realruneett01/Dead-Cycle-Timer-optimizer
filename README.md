@@ -8,12 +8,12 @@
 
 [![Python](https://img.shields.io/badge/Python-3.11_%7C_3.12-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
 [![OPC-UA](https://img.shields.io/badge/IEC_62541-OPC--UA-005C8A?style=for-the-badge&logo=industrial-shields&logoColor=white)](https://opcfoundation.org/)
-[![Tests](https://img.shields.io/badge/Pytest-38_Passed-10B981?style=for-the-badge&logo=pytest&logoColor=white)](tests/)
+[![Tests](https://img.shields.io/badge/Pytest-39_Passed-10B981?style=for-the-badge&logo=pytest&logoColor=white)](tests/)
 [![Precision](https://img.shields.io/badge/Precision_(simulated)-95.42%25-2563EB?style=for-the-badge)](#-benchmark-validation)
 [![Recall](https://img.shields.io/badge/Recall_(simulated)-98.65%25-059669?style=for-the-badge)](#-benchmark-validation)
 [![F1](https://img.shields.io/badge/F1_(simulated)-0.9685-7C3AED?style=for-the-badge)](#-benchmark-validation)
 [![FPR](https://img.shields.io/badge/FPR_(simulated)-0.33%25-10B981?style=for-the-badge)](#-benchmark-validation)
-[![License: MIT](https://img.shields.io/badge/License-MIT-6B7280?style=for-the-badge)](LICENSE)
+[![License: Proprietary](https://img.shields.io/badge/License-Proprietary-B91C1C?style=for-the-badge)](LICENSE)
 
 **Micro-stall detection for hydraulic aluminum extrusion presses (modelled on a 28 MN press).**
 Page's CUSUM sequential test (SPRT-grounded) fused with Ruptures Pelt changepoint detection and a Gaussian HMM —
@@ -45,11 +45,13 @@ What is demonstrated, and what is not:
 
 | Claim | Status |
 |---|---|
-| Detection pipeline runs end to end (simulator → OPC-UA → detector → dashboard) | ✅ Tested (38 automated tests) |
+| Detection pipeline runs end to end (simulator → OPC-UA → detector → dashboard) | ✅ Tested (39 automated tests) |
 | Detection accuracy on simulated faults | ✅ Measured, but **in-sample** (see Benchmark) |
 | Works on a real press, real PLC, or real sensors | ❌ **Not tested** |
 | Financial recovery figures | ⚠️ Model output from assumed inputs, not measured savings |
-| Runs on Windows, ARM, Docker, systemd | ⚠️ Written but only exercised on Linux x86-64 |
+| Docker (build, run, healthcheck, resource-limit profiles, restart on failure) | ✅ Tested on Linux x86-64 |
+| systemd unit | ⚠️ Syntax-verified only, not run under a live systemd |
+| Windows, ARM | ⚠️ Dependency wheels exist for both; the software itself has not been executed there. Commands in [TESTING.md](TESTING.md) |
 
 **Data contract.** DCTO reads an OPC-UA server that publishes three values: the current phase name,
 a cycle counter, and each phase's duration in seconds. It does not read analog, USB, serial or Modbus
@@ -315,7 +317,7 @@ Dead-Cycle-Timer-optimizer/
 ├── PROPRIETARY_TECH.md               # What is and is not original
 ├── requirements.txt                  # Minimum-version Python dependencies
 ├── .gitignore
-├── LICENSE                           # MIT
+├── LICENSE                           # Proprietary (all rights reserved)
 └── README.md
 ```
 
@@ -340,7 +342,7 @@ pip install -r requirements.txt
 
 ```powershell
 pytest -v
-# Expected: 38 passed
+# Expected: 39 passed
 ```
 
 ### 3. Run the 600-Cycle Benchmark
@@ -446,4 +448,6 @@ motion-control loop.
 
 ## 📜 License
 
-[MIT](LICENSE) — open for industrial research and portfolio use.
+**Proprietary. All rights reserved.** No use, copying, modification, redistribution, reverse engineering or
+AI-training use is permitted without a signed written agreement. See [LICENSE](LICENSE). Versions released
+before 24 October 2026 were published under MIT; that grant covers those versions only.

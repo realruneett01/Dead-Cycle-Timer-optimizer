@@ -106,7 +106,24 @@ def cmd_health(args) -> int:
     if age > args.max_age:
         print(f"telemetry stale: {age:.0f}s old", file=sys.stderr)
         return 1
+    with open(path, encoding="utf-8") as f:
+        rows = sum(1 for _ in f) - 1  # minus header
+    if rows < 1:
+        print("telemetry file has a header but no events yet", file=sys.stderr)
+        return 1
     return 0
+
+
+async def _watch_children(procs: List[subprocess.Popen], stop: asyncio.Event) -> bool:
+    """Stops the run (so a supervisor can restart it) if the simulator or dashboard dies."""
+    while not stop.is_set():
+        for p in procs:
+            if p.poll() is not None:
+                logger.error("Child process %s exited with code %s; stopping", p.args[2:4], p.returncode)
+                stop.set()
+                return True
+        await asyncio.sleep(1.0)
+    return False
 
 
 async def _run(settings: Settings) -> int:
@@ -136,7 +153,11 @@ async def _run(settings: Settings) -> int:
                 "--server.port", str(settings.dashboard_port),
                 "--server.headless", "true", "--browser.gatherUsageStats", "false",
             ], cwd=PROJECT_ROOT))
+        watchdog = asyncio.create_task(_watch_children(procs, stop))
         await run_ingest(settings, endpoint, stop)
+        if watchdog.done() and watchdog.result():
+            return 1
+        watchdog.cancel()
     finally:
         for p in procs:
             p.terminate()

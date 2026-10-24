@@ -1,21 +1,78 @@
-MIT License
+DEAD-CYCLE TIME OPTIMIZER (DCTO) — PROPRIETARY SOFTWARE LICENSE
 
-Copyright (c) 2026 Dead-Cycle Time Optimizer (DCTO) Contributors
+Copyright (c) 2026 realruneett01 ("Owner"). ALL RIGHTS RESERVED.
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+THIS IS NOT OPEN-SOURCE SOFTWARE. No license of any kind is granted to you except as expressly stated in
+a separate written agreement signed by the Owner. Possession of a copy of this software, source code,
+documentation, calibration data, models, or any other material in this repository (together, the
+"Software") does not give you any right to use it.
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+1. NO RIGHTS GRANTED
+   Absent a signed written agreement, you may NOT: (a) use, run, or execute the Software; (b) copy,
+   reproduce, or store it beyond what is strictly necessary to read this notice; (c) modify, adapt,
+   translate, or create derivative works; (d) distribute, sublicense, sell, lease, lend, host, publish,
+   or otherwise make it available to any third party, including as a service (SaaS, API, or managed
+   offering); (e) reverse engineer, decompile, disassemble, or attempt to derive the algorithms,
+   thresholds, fusion rules, calibration methods, or other trade secrets it embodies, except where
+   applicable law forbids this restriction; (f) use it, its outputs, or its documentation to build,
+   train, fine-tune, evaluate, or improve any machine-learning or AI model, or any competing product or
+   service; (g) remove or alter any proprietary notice; (h) publish benchmarks or performance results
+   about it without the Owner's prior written consent.
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+2. OWNERSHIP
+   The Owner retains all right, title, and interest, including all copyrights, trade secrets, patent
+   rights, and other intellectual property in the Software, its design, parameters, and methods. No
+   patent license is granted, expressly or by implication, estoppel, or exhaustion. Feedback you provide
+   is assigned to the Owner.
+
+3. CONFIDENTIALITY AND TRADE SECRETS
+   The Software, and in particular the detection fusion logic, tuned parameters, calibration and
+   commissioning procedures, press models, and fault taxonomy, are confidential information and trade
+   secrets of the Owner. If you have access to them you must keep them in strict confidence, use
+   reasonable security measures, and disclose them to no one. These duties survive indefinitely for as
+   long as the information remains a trade secret.
+
+4. PRIOR VERSIONS
+   Versions of the Software distributed before 24 October 2026 were released under the MIT License.
+   Persons who lawfully received those versions keep the rights that licence gave them for those
+   versions only. This licence governs every later version, and nothing here grants any right in later
+   versions by reason of the earlier MIT grant.
+
+5. EVALUATION OR COMMERCIAL USE
+   Evaluation, pilot, or commercial rights are available only under a separate written agreement signed
+   by the Owner. Any such agreement overrides this licence only to the extent it says so expressly.
+
+6. TERMINATION
+   Any use, access, or conduct not authorised in writing is unauthorised from the start. On any
+   breach, all permissions (if any) end automatically and you must immediately stop using the Software
+   and destroy all copies in your possession or control, and certify that you have done so on request.
+
+7. NO WARRANTY
+   THE SOFTWARE IS PROVIDED "AS IS" AND "AS AVAILABLE", WITHOUT WARRANTY OF ANY KIND, EXPRESS, IMPLIED,
+   OR STATUTORY, INCLUDING WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, ACCURACY,
+   NON-INFRINGEMENT, OR UNINTERRUPTED OR ERROR-FREE OPERATION. Detection results and financial figures
+   are estimates. The Software has been validated on simulated data only and is not a safety system,
+   control system, or substitute for the judgment of qualified personnel. It must not be used in any
+   safety-critical, motion-control, or life-safety function.
+
+8. LIMITATION OF LIABILITY
+   TO THE MAXIMUM EXTENT PERMITTED BY LAW, THE OWNER IS NOT LIABLE FOR ANY INDIRECT, INCIDENTAL,
+   SPECIAL, CONSEQUENTIAL, EXEMPLARY, OR PUNITIVE DAMAGES, OR FOR LOSS OF PROFITS, REVENUE, DATA,
+   PRODUCTION, OR GOODWILL, OR FOR EQUIPMENT DAMAGE OR PERSONAL INJURY ARISING FROM USE OR INABILITY TO
+   USE THE SOFTWARE, UNDER ANY THEORY OF LIABILITY, EVEN IF ADVISED OF THE POSSIBILITY. THE OWNER'S
+   TOTAL AGGREGATE LIABILITY SHALL NOT EXCEED ONE HUNDRED (100) US DOLLARS. YOU WILL INDEMNIFY AND HOLD
+   THE OWNER HARMLESS FROM CLAIMS ARISING FROM YOUR UNAUTHORISED USE OR YOUR BREACH OF THIS LICENCE.
+
+9. REMEDIES
+   Unauthorised use or disclosure would cause irreparable harm for which damages are inadequate. The
+   Owner is entitled to injunctive and other equitable relief without posting bond, in addition to all
+   other remedies, including recovery of reasonable legal fees where permitted by law.
+
+10. GENERAL
+   Governing law and venue: [JURISDICTION TO BE COMPLETED BY OWNER]. If any provision is unenforceable,
+   the remainder stays in force and the provision is enforced to the maximum extent allowed. Failure to
+   enforce a right is not a waiver. This licence is the entire agreement concerning the Software absent
+   a signed written agreement. Export, sanctions, and other laws apply to your possession of the
+   Software and you are responsible for compliance.
+
+Permission requests: contact the Owner through the GitHub account realruneett01.

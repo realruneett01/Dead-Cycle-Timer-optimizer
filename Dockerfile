@@ -1,6 +1,7 @@
 # Profile is auto-selected at start-up from the container's CPU/memory limits (see deploy/profiles.py).
 # Build slim headless image for edge boxes:  docker build --build-arg DASHBOARD=0 -t dcto:edge .
-FROM python:3.12-slim
+ARG BASE_IMAGE=python:3.12-slim
+FROM ${BASE_IMAGE}
 
 ARG DASHBOARD=1
 ENV PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1 PIP_NO_CACHE_DIR=1 \

@@ -103,3 +103,11 @@ async def test_node_discovery_finds_nodes_without_hardcoded_paths():
             assert set(nodes) == {"phase", "cycle", "duration"}
             with pytest.raises(LookupError, match="node_names"):
                 await discover_nodes(client, {"duration": "NoSuchNode"})
+
+
+def test_cgroup_cpu_quota_caps_cpu_count(monkeypatch):
+    from deploy import hostprobe
+    monkeypatch.setattr(hostprobe, "_cgroup_cpu_limit", lambda: 1.5)
+    assert hostprobe._cpu_count() <= 2
+    monkeypatch.setattr(hostprobe, "_cgroup_cpu_limit", lambda: None)
+    assert hostprobe._cpu_count() >= 1

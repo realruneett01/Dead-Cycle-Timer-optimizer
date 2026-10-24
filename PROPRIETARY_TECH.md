@@ -39,9 +39,10 @@ Anyone can reimplement each of these from the literature.
 - The benchmark is on **simulated** data (`simulator/`). The numbers in the README are not yet
   evidence of performance on a real press; real-plant data would be the most valuable proprietary
   asset and the strongest moat.
-- **Privatising the repo does not recall copies already made.** `LICENSE` is currently MIT, and
-  anyone who cloned or forked while it was public keeps an irrevocable MIT grant to that
-  snapshot. Replace `LICENSE` with a proprietary notice for future work (a licensing decision
-  for the owner/counsel; deliberately not changed here), and remove the MIT badge from the README.
+- **Privatising the repo does not recall copies already made.** Versions before 24 October 2026 were
+  MIT. Anyone who cloned or forked them keeps an irrevocable MIT grant to *those versions*. `LICENSE`
+  is now proprietary for everything after. It is a strong all-rights-reserved text, but it is a
+  template written without legal review: have counsel fill in the governing law (marked in `LICENSE`),
+  confirm the Owner name, and check it holds in your jurisdiction.
 - Check the public git history for anything you do not want exposed. Making a repo private does
   not remove it from existing forks or caches.

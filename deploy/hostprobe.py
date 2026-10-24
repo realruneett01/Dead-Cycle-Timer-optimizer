@@ -1,5 +1,6 @@
 """Detects the capabilities of the machine DCTO is being installed on."""
 import importlib.util
+import math
 import os
 import platform
 import socket
@@ -34,11 +35,39 @@ class HostInfo:
         return asdict(self)
 
 
+def _cgroup_cpu_limit() -> Optional[float]:
+    """CPU limit from a cgroup quota (docker --cpus, Kubernetes limits), or None if unlimited."""
+    try:
+        quota, period = Path("/sys/fs/cgroup/cpu.max").read_text(encoding="utf-8").split()
+        if quota != "max":
+            return int(quota) / int(period)
+        return None
+    except (OSError, ValueError):
+        pass
+    quota_v1 = _read_signed("/sys/fs/cgroup/cpu/cpu.cfs_quota_us")
+    period_v1 = _read_signed("/sys/fs/cgroup/cpu/cpu.cfs_period_us")
+    if quota_v1 and quota_v1 > 0 and period_v1 and period_v1 > 0:
+        return quota_v1 / period_v1
+    return None
+
+
+def _read_signed(path: str) -> Optional[int]:
+    try:
+        return int(Path(path).read_text(encoding="utf-8").strip())
+    except (OSError, ValueError):
+        return None
+
+
 def _cpu_count() -> int:
-    """Counts CPUs this process may use (honours affinity and container pinning)."""
+    """CPUs this process may use: affinity, further capped by any cgroup quota."""
     if hasattr(os, "sched_getaffinity"):
-        return max(1, len(os.sched_getaffinity(0)))
-    return max(1, os.cpu_count() or 1)
+        count = max(1, len(os.sched_getaffinity(0)))
+    else:
+        count = max(1, os.cpu_count() or 1)
+    limit = _cgroup_cpu_limit()
+    if limit is not None:
+        count = min(count, max(1, math.ceil(limit)))
+    return count
 
 
 def _read_int(path: str) -> Optional[int]:
